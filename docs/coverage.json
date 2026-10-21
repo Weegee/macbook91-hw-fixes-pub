@@ -1,0 +1,393 @@
+{
+  "schema": "component, capability, problem, existing_fix_owner, decision, risk_rollback, acceptance, evidence{kind: hardware|source|test|hypothesis}, status: PASS|FAIL|NOT_RUN|BLOCKED|NOT_APPLICABLE",
+  "updated": "2026-10-21T05:39+02:00",
+  "items": [
+    {
+      "component": "Display backlight (eDP, i915, acpi_video0)",
+      "capability": "brightness 0..100, 0 = off, 100 = hardware max",
+      "problem": "acpi_video0 levels 0..90 % via OpRegion: max ≈90 %, 91 steps, 0 clamped to VBT minimum",
+      "existing_fix_owner": "none",
+      "decision": "macbook91-hw-migrate backlight-native: acpi_backlight=native in /etc/default/limine",
+      "risk_rollback": "affects boot only; macbook91-hw-migrate rollback backlight-native; Limine menu cmdline edit",
+      "acceptance": "after reboot: intel_backlight present, acpi_video0 absent; 0 dark; key up re-lights; max = 1388; Plasma slider monotone; value kept over suspend",
+      "evidence": [
+        {
+          "kind": "hardware",
+          "ref": "DSDT _BCL/ABCM/AINT; reg 0xC8254=0x056C0000; sysfs"
+        },
+        {
+          "kind": "source",
+          "ref": "intel_backlight.c update_status; video_detect.c Apple quirks"
+        }
+      ],
+      "status": "PASS",
+      "note": "after reboot: intel_backlight max 1388, acpi_video0 absent; ramp 1389 levels monotone; 0 dark; F2 re-lights; Plasma slider ok (user); value kept over suspend (series)"
+    },
+    {
+      "component": "Brightness curve (perceptual)",
+      "capability": "even-looking steps, fine dark range",
+      "problem": "KDE steps intel_backlight linearly; 0→5→10 % look drastic in dim rooms; KDE declined perceptual scaling (bug 448459 WONTFIX)",
+      "existing_fix_owner": "none",
+      "decision": "DKMS module macbook91_backlight: platform-type device, CIE L* 0..1000 → intel_backlight",
+      "risk_rollback": "pacman -R removes module; or blacklist macbook91_backlight; intel_backlight stays functional",
+      "acceptance": "module autoloads at boot; PowerDevil drives it; mapping matches reference; user finds steps even and dark range usable",
+      "evidence": [
+        {
+          "kind": "source",
+          "ref": "powerdevil backlighthelper_linux.cpp type priority; kwin externalbrightness_v1.cpp linear"
+        },
+        {
+          "kind": "hardware",
+          "ref": "15/15 levels match reference; SetBrightness 3000→301→raw 87; builds 7.2.9 and 6.18.55"
+        }
+      ],
+      "status": "PASS",
+      "note": "user test 2026-10-13 23:35 PASS; night series with DKMS build; reboot 2026-10-14 08:44: autoloaded by DMI alias (20261013.01), PowerDevil restores level"
+    },
+    {
+      "component": "Brightness keys / Plasma integration",
+      "capability": "keys change brightness, re-light at 0",
+      "problem": "untested with native backlight",
+      "existing_fix_owner": "applespi keymap + KWin/PowerDevil 6.7.5",
+      "decision": "verify after reboot",
+      "risk_rollback": "-",
+      "acceptance": "F1/F2 change intel_backlight monotonically; from 0 F2 re-lights",
+      "evidence": [
+        {
+          "kind": "hardware",
+          "ref": "user test 2026-10-13: F1/F2 monotone, F2 re-lights from 0"
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "component": "NVMe Apple AP0256J 106b:2003",
+      "capability": "suspend/resume, I/O, power states",
+      "problem": "Apple NVMe may not come back after suspend if its root port enters D3 (known 2016 MacBook issue); an earlier hand-installed rule held d3cold_allowed=0 with a wrong (runtime) rationale",
+      "existing_fix_owner": "an earlier hand-installed udev rule; since 20261021.01 the package no longer touches it (the migration step for it was removed)",
+      "decision": "package udev rule 60-macbook91-nvme-d3cold.rules (DMI-gated), set live in install scriptlet; the packaged rule is the only one the package knows",
+      "risk_rollback": "no test without the setting (would risk the root disk); removing the package drops the rule at next boot",
+      "acceptance": "after reboot: d3cold_allowed=0 from the packaged rule; NVMe I/O ok in every suspend cycle; no nvme kernel errors",
+      "evidence": [
+        {
+          "kind": "source",
+          "ref": "pci.c pci_dev_check_d3cold, pci.h pci_power_manageable, pci-driver.c:948 suspend_noirq; nvme/host/pci.c no pm_runtime"
+        },
+        {
+          "kind": "hardware",
+          "ref": "RP01 HotPlug-, BIOS 2023; udevadm test DMI match; NCQA=NSQA=1"
+        },
+        {
+          "kind": "source",
+          "ref": "bbs.archlinux.org 246806; forum.pine64.org pid 71654 (mbp-2016-linux)"
+        }
+      ],
+      "status": "PASS",
+      "note": "final series 2026-10-14 02:00-03:15 on the candidate (pkg 20261013.01, DKMS backlight loaded): 101 cycles + 1805 s deep, packaged udev rule keeps d3cold_allowed=0, io ok every cycle, 0 nvme kernel errors, smart critical_warning 0"
+    },
+    {
+      "component": "Suspend S3 (deep)",
+      "capability": "systemd path, idle and load",
+      "problem": "long-term stability unproven",
+      "existing_fix_owner": "drivers in sibling packages",
+      "decision": "tools/dev-suspend-series.sh; ≥100 cycles on final candidate",
+      "risk_rollback": "series stops at first failure, FATAL on storage errors",
+      "acceptance": "every cycle: slept until alarm, NVMe I/O, WLAN back, audio, camera, keyboard, backlight >0, no new kernel errors",
+      "evidence": [
+        {
+          "kind": "hardware",
+          "ref": "pre-run 2026-10-13: deep idle 10/10, deep all-load 10/10 (pre-migration)"
+        }
+      ],
+      "status": "PASS",
+      "note": "final series 2026-10-14 02:00-03:15 on the candidate (pkg 20261013.01, DKMS backlight loaded): 30 idle + 30 load + 1x1805 s, 61/61 PASS, 0 early wakes, WLAN back <=3 s, audio/camera/keyboard ok, 0 kernel warnings/errors"
+    },
+    {
+      "component": "Suspend s2idle",
+      "capability": "systemd path, idle and load",
+      "problem": "-",
+      "existing_fix_owner": "-",
+      "decision": "include in series",
+      "risk_rollback": "-",
+      "acceptance": "as deep",
+      "evidence": [
+        {
+          "kind": "hardware",
+          "ref": "pre-run 2026-10-13: s2idle idle 10/10, s2idle all-load 10/10"
+        }
+      ],
+      "status": "PASS",
+      "note": "final series 2026-10-14 02:00-03:15 on the candidate (pkg 20261013.01, DKMS backlight loaded): 20 idle + 20 load, 40/40 PASS, 0 early wakes, WLAN back <=3 s, 0 kernel warnings/errors"
+    },
+    {
+      "component": "Lid wake (LID0)",
+      "capability": "suspend with lid open stays asleep; opening lid wakes",
+      "problem": "after one real lid close/open, every open-lid deep suspend wakes after 4-5 s via GPE 0x6F (10/10)",
+      "existing_fix_owner": "an earlier hand-installed sleep hook; since 20261021.01 the package no longer touches it (the migration step for it was removed) and the packaged hook no longer stands aside for it, so such a hook has to be removed by hand",
+      "decision": "package hook macbook91-lid-wake (same logic as the earlier hook); the packaged hook is the only one the package knows",
+      "risk_rollback": "removing the package removes the hook",
+      "acceptance": "with packaged hook: open-lid suspend after lid cycle sleeps to alarm; lid close→open wakes; composite case (menu standby open, key wake, close, open wakes)",
+      "evidence": [
+        {
+          "kind": "hardware",
+          "ref": "journal 20:45-22:06: 10 PowerDevil/series suspends woke after 4-5 s, gpe6F +1 each; with hook 2/2 slept to RTC, gpe6F unchanged"
+        }
+      ],
+      "status": "PASS",
+      "note": "packaged hook: 2/2 open-lid cycles after lid cycle; user 22:17-22:20 close/open and composite case PASS; open-lid wake only by power button (applespi has no keypress wake)"
+    },
+    {
+      "component": "Hibernate",
+      "capability": "persistent swap + resume",
+      "problem": "only zram swap; resume 0:0",
+      "existing_fix_owner": "none",
+      "decision": "prepare @swap subvolume swapfile + resume= (not applied)",
+      "risk_rollback": "-",
+      "acceptance": "hibernate/resume on LUKS with user present; camera, net, audio, display, input, data intact",
+      "evidence": [
+        {
+          "kind": "hardware",
+          "ref": "/sys/power/resume 0:0; swapon"
+        }
+      ],
+      "status": "BLOCKED",
+      "blocker": "LUKS passphrase at resume needs user"
+    },
+    {
+      "component": "PCIe ASPM",
+      "capability": "link power",
+      "problem": "FADT 'ASPM not supported'; pcie_aspm=force set by user tuning",
+      "existing_fix_owner": "user cmdline (tuning)",
+      "decision": "keep; siblings validated with it",
+      "risk_rollback": "-",
+      "acceptance": "verify reports it",
+      "evidence": [
+        {
+          "kind": "hardware",
+          "ref": "FADT dump of the test machine and the hardware notes of the camera repository (neither is included in this repository)"
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "component": "Keyboard/touchpad applespi",
+      "capability": "ISO layout, Fn, resume",
+      "problem": "applespi cannot detect ISO vs ANSI (iso_layout bool default 0): ISO units need iso_layout=1; crc mismatch after resume; touch jumps; no wake on keypress/touchpad (applespi limitation)",
+      "existing_fix_owner": "user /etc/modprobe.d/applespi.conf iso_layout=1 (also in initramfs)",
+      "decision": "optional migrate step keyboard-iso (modprobe.d + live + initramfs); verify warns on ISO keymap without it; libinput 1.32 already has applespi touchpad quirks",
+      "risk_rollback": "-",
+      "acceptance": "keyboard device present after every resume (series); typing/ISO keys (user)",
+      "evidence": [
+        {
+          "kind": "source",
+          "ref": "applespi.c:104-106,1104"
+        },
+        {
+          "kind": "hardware",
+          "ref": "sysfs; lsinitcpio; libinput 50-system-apple.quirks vendor 0x06cb; series kbd=ok 40/40"
+        }
+      ],
+      "status": "NOT_RUN",
+      "note": "perceptual/typing test needs user"
+    },
+    {
+      "component": "Keyboard backlight spi::kbd_backlight",
+      "capability": "keys, Plasma",
+      "problem": "-",
+      "existing_fix_owner": "applespi",
+      "decision": "verify presence",
+      "risk_rollback": "-",
+      "acceptance": "LED 0..255 present; keys change it (user)",
+      "evidence": [
+        {
+          "kind": "hardware",
+          "ref": "sysfs"
+        }
+      ],
+      "status": "PASS",
+      "note": "F5/F6 work in 5 steps of 20 % (PowerDevil calculateSteps, by design)"
+    },
+    {
+      "component": "Ambient light sensor ACPI0008",
+      "capability": "lux via iio",
+      "problem": "no desktop auto-brightness consumer",
+      "existing_fix_owner": "kernel acpi-als",
+      "decision": "no package action",
+      "risk_rollback": "-",
+      "acceptance": "iio device present",
+      "evidence": [
+        {
+          "kind": "hardware",
+          "ref": "iio:device0 acpi-als"
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "component": "ICC/colour",
+      "capability": "panel profile",
+      "problem": "user profile Macbook12_2016.icc is an X-Rite measurement of another unit; contains vcgt",
+      "existing_fix_owner": "user KWin config",
+      "decision": "document; Apple profile research pending",
+      "risk_rollback": "-",
+      "acceptance": "profile provenance stated; no double gamma",
+      "evidence": [
+        {
+          "kind": "hardware",
+          "ref": "ICC header/tags; EDID 0xa027"
+        }
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "component": "Battery / charging",
+      "capability": "capacity reporting",
+      "problem": "sysfs capacity is relative to design capacity (70 %) while Plasma shows relative to full (90 %)",
+      "existing_fix_owner": "-",
+      "decision": "none (a reporting difference, not a fault); the charge limit is the item 'Battery charge limit (SMC key BCLM, ACPI SBS BAT0)'",
+      "risk_rollback": "-",
+      "acceptance": "-",
+      "evidence": [
+        {
+          "kind": "hardware",
+          "ref": "sysfs BAT0"
+        }
+      ],
+      "status": "NOT_APPLICABLE"
+    },
+    {
+      "component": "USB-C PD (APPLE-I2C-HPM0)",
+      "capability": "typec class",
+      "problem": "no Linux driver",
+      "existing_fix_owner": "-",
+      "decision": "none",
+      "risk_rollback": "-",
+      "acceptance": "charging works (hardware); external display via adapter (user)",
+      "evidence": [
+        {
+          "kind": "hardware",
+          "ref": "no /sys/class/typec"
+        }
+      ],
+      "status": "NOT_RUN",
+      "note": "accessory not available unattended"
+    },
+    {
+      "component": "Thermal (fanless)",
+      "capability": "passive throttling",
+      "problem": "70 °C idle with EPP=performance on AC (user TLP tuning)",
+      "existing_fix_owner": "user TLP configuration",
+      "decision": "report only (general tuning not adopted)",
+      "risk_rollback": "-",
+      "acceptance": "-",
+      "evidence": [
+        {
+          "kind": "hardware",
+          "ref": "sensors, intel_pstate"
+        }
+      ],
+      "status": "NOT_APPLICABLE"
+    },
+    {
+      "component": "GPU i915 HD 515",
+      "capability": "DC states, PSR, FBC, VA-API",
+      "problem": "PSR unsupported by panel, FBC off (pixel format)",
+      "existing_fix_owner": "kernel defaults",
+      "decision": "none",
+      "risk_rollback": "-",
+      "acceptance": "no GPU hang in series",
+      "evidence": [
+        {
+          "kind": "hardware",
+          "ref": "debugfs, vainfo iHD 26.3.5"
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "component": "Audio CS4208",
+      "capability": "-",
+      "problem": "-",
+      "existing_fix_owner": "macbook91-cs4208-dkms",
+      "decision": "hard dependency",
+      "risk_rollback": "-",
+      "acceptance": "audio-verify passes; card present after resume",
+      "evidence": [
+        {
+          "kind": "hardware",
+          "ref": "audio-verify 22/0/5; series audio=ok"
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "component": "Camera FaceTimeHD",
+      "capability": "-",
+      "problem": "-",
+      "existing_fix_owner": "macbook91-facetimehd-dkms",
+      "decision": "hard dependency",
+      "risk_rollback": "-",
+      "acceptance": "facetimehd-verify PASS; stream survives series",
+      "evidence": [
+        {
+          "kind": "hardware",
+          "ref": "verify PASS; all-load series 20/20"
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "component": "WLAN/Bluetooth BCM4350",
+      "capability": "-",
+      "problem": "BT soft-blocked by KDE (user setting)",
+      "existing_fix_owner": "macbook91-wireless-dkms",
+      "decision": "hard dependency",
+      "risk_rollback": "-",
+      "acceptance": "wireless-verify 0 FAIL; WLAN back ≤60 s after resume",
+      "evidence": [
+        {
+          "kind": "hardware",
+          "ref": "verify 0 FAIL; series wifi 3 s"
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "component": "Release",
+      "capability": "package delivery",
+      "problem": "-",
+      "existing_fix_owner": "none",
+      "decision": "release as source tarball plus PKGBUILD; the package is built from the release files with makepkg",
+      "risk_rollback": "-",
+      "acceptance": "package builds from the release files with makepkg; the tarball checksum equals the PKGBUILD pin; namcap reports no errors",
+      "evidence": [
+        {
+          "kind": "test",
+          "ref": "release/20261021.01 (SHA256SUMS, PKGBUILD pin); tests/run-tests.sh package-content checks; docs/test-status.json (namcap)"
+        }
+      ],
+      "status": "PASS",
+      "note": "historical: release v20261013.01 was installed on the test machine with pacman; DKMS built for both kernels, verify 29/0/0 (docs/test-status.json)"
+    },
+    {
+      "component": "Battery charge limit (SMC key BCLM, ACPI SBS BAT0)",
+      "capability": "stop charging at a user-chosen level (charge_control_end_threshold), settable in Plasma",
+      "problem": "in-tree applesmc exposes no charge limit; PowerDevil: 'Charge thresholds are not supported by the kernel for this hardware'",
+      "existing_fix_owner": "none (applesmc-next replaces applesmc and sbs; not packaged)",
+      "decision": "DKMS replacement macbook91-applesmc: pristine applesmc.c per series (6.18.55, 7.2.9) + own patch, power_supply extension on BAT0 mapping charge_control_end_threshold (10..100) to BCLM",
+      "risk_rollback": "replaces an in-tree module; other kernel series keep in-tree applesmc (BUILD_EXCLUSIVE_KERNEL); pre_remove resets BCLM to 100; rollback: pacman -R or rmmod applesmc + delete updates/dkms/applesmc",
+      "acceptance": "attribute present after boot; BCLM below charge level stops charging on AC; 100 resumes; value survives suspend and reboot; Plasma shows and sets it | PASS: attribute, stop, resume, DKMS load, verify; NOT_RUN: persistence over suspend/reboot, Plasma UI",
+      "evidence": [
+        {
+          "kind": "hardware",
+          "ref": "SMC key list: BCLM ui8 100; 2026-10-14 prototype: 62 % on AC, BCLM 55 -> 1.22 A to 0 within 15 s, 100 -> 1.8 A"
+        },
+        {
+          "kind": "source",
+          "ref": "power_supply_core.c v7.2.9 register_extension updates sysfs; PowerDevil 6.7.5 chargethresholdhelper_linux.cpp needs only charge_control_end_threshold"
+        }
+      ],
+      "status": "PASS"
+    }
+  ]
+}

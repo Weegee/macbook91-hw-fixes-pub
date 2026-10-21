@@ -1,0 +1,24 @@
+pkgbase = macbook91-hw-fixes
+	pkgdesc = Hardware fixes and checks for the Apple MacBook9,1 (A1534): backlight, charge limit, NVMe, lid wake
+	pkgver = 20261021.01
+	pkgrel = 1
+	url = https://github.com/Weegee/macbook91-hw-fixes-pub
+	arch = any
+	license = GPL-3.0-or-later
+	license = GPL-2.0-or-later
+	license = GPL-2.0-only
+	makedepends = make
+	makedepends = patch
+	source = macbook91-hw-fixes-20261021.01.tar
+	sha256sums = 4f72b6dd9d5c0b726889b755cc936f6c13248c09dcd9d783cf950aa64e42a5f0
+
+pkgname = macbook91-hw-fixes
+	install = macbook91-hw-fixes.install
+	depends = bash
+	depends = coreutils
+	depends = grep
+	depends = sed
+	depends = systemd
+	depends = dkms
+	optdepends = limine-mkinitcpio-hook: lets macbook91-hw-migrate apply kernel parameters on Limine
+	optdepends = nvme-cli: lets macbook91-hw-verify read the NVMe health log (as root)

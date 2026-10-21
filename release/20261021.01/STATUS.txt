@@ -1,0 +1,125 @@
+macbook91-hw-fixes 20261021.01-1 - RELEASED (tag v20261021.01, 2026-10-21; installed on the test machine for the hardware gate)
+
+What: first release prepared for the public repository. Changes to the
+shipped scripts and the package dependencies, plus documentation and licensing
+text; no change to the kernel modules or the udev rule.
+- The package stands on its own: it no longer depends on
+  macbook91-cs4208-dkms, macbook91-facetimehd-dkms and
+  macbook91-wireless-dkms. macbook91-hw-verify checks those packages and their
+  DKMS modules only where they are installed (INFO otherwise, no FAIL), no
+  longer checks for the camera firmware package, and --deep skips a verify
+  tool that is not installed.
+- Removed: the two macbook91-hw-migrate steps that deleted earlier
+  hand-installed files (an NVMe udev rule and a sleep hook of a previous
+  setup), the check for that hook in macbook91-lid-wake and the INFO branch for
+  it in macbook91-hw-verify. The sleep check no longer accepts such a
+  hand-installed hook in place of the packaged one (INFO before): only
+  macbook91-lid-wake passes, otherwise the check FAILs. macbook91-hw-migrate keeps backlight-native (default), keyboard-iso
+  and hibernate (the last two only when named). Behaviour change: status and
+  rollback no longer know the two removed step names; a leftover state record
+  applied/legacy-d3cold-rule or applied/legacy-sleep-hook under
+  /var/lib/macbook91-hw-fixes is ignored, rollback with such a name reports
+  "unknown step", and the record is harmless (VERIFIED by reading the step
+  lists, NOT RUN on hardware). The packaged lid hook also no longer stands
+  aside for an earlier hand-installed hook of the same kind; two such hooks
+  would both toggle LID0, so an earlier hook has to be removed by hand
+  (VERIFIED by reading the removed lines, NOT RUN on hardware).
+- README: install instructions for Arch Linux (the driver packages are
+  optional and have their own instructions; all files of the release go into
+  one empty directory; makepkg needs PKGBUILD,
+  macbook91-hw-fixes.install and the source tarball; sha256sum -c
+  --ignore-missing SHA256SUMS must print OK for those three; make dist needs a
+  git checkout), AI assistance note in the wording shared by the four
+  repositories, license table with paths of this repository only, and the note that the first three snapshots (20261013.01 to
+  20261015.01) carried a GPL-2.0-only notice. LICENSES/GPL-3.0-or-later.txt
+  added (identical to LICENSE), the unused LICENSES/MIT.txt removed.
+  docs/FINDINGS.md and the Makefile header are worded for a public reader.
+- Details: docs/CHANGELOG.md.
+
+Source tarball against that of 20261020.02 (diff -r of the unpacked
+tarballs): README.md, docs/FINDINGS.md, Makefile, VERSION,
+src/macbook91-hw-migrate, src/macbook91-hw-verify and sleep/macbook91-lid-wake
+differ, LICENSES/GPL-3.0-or-later.txt is added. Everything under kernel/ and
+udev/ (module sources, applesmc patch and upstream copies, Makefiles,
+dkms.conf, udev rule), LICENSE and the GPL-2.0 license texts are byte for byte
+the same. Of the three changed scripts the diffs are +7/-81, +2/-4 and +0/-5
+lines (migrate, verify, lid-wake).
+
+Measured without hardware (2026-10-21):
+- make dist: the tarball is the one pinned in PKGBUILD (sha256 4f72b6dd...).
+  make arch-pkg builds the package from it. Earlier tarballs of this candidate
+  (never published; the last one 28b15fdd...) differ in README.md and
+  src/macbook91-hw-verify.
+- tests/run-tests.sh: 99 passed, 0 failed (hermetic, fake roots, kernel build
+  against the headers of the running kernel); 104 passed, 0 failed with the
+  five package-content checks on the extracted package (PKGDIR_CHECK).
+- namcap: no findings for the PKGBUILD; the package has five dependency
+  warnings (coreutils, grep, sed, systemd, dkms are listed by design), 0
+  errors.
+- ShellCheck at warning level, bash -n and git diff --check are clean.
+
+Checks of the published tree (verification driver, 2026-10-21, tarball
+4f72b6dd..., on the committed state before the hardware gate record was
+added; that record changes only docs/test-status.json, this file and its
+SHA256SUMS):
+- Tree: 42 files with one complete release directory, version 20261021.01; the
+  published files equal the committed ones in mode and blob id.
+- Deny-list scan (strict) over the file tree and over the messages of the
+  tidy-up commits that change published files: no hit, no unused allow entry.
+- tests/run-tests.sh: 99 passed, 0 failed in the maintainer's checkout and in
+  a copy of the published tree (the suite has no blocked counter); the private
+  tests pass.
+- Reproducibility: make dist in the maintainer's checkout, in a copy of the
+  published tree and in a second checkout gives the same tarball (4f72b6dd...),
+  equal to the PKGBUILD pin, SHA256SUMS and the release file.
+- Links: all relative links and paths cited in docs/*.json resolve; the two
+  development tools pass bash -n and ShellCheck.
+- Identity: kernel/, udev/, LICENSE and the GPL-2.0 texts (13 files) are byte
+  for byte equal to 20261020.02, the Makefile is equal after comment removal;
+  the three scripts differ on purpose.
+- Package assets: not applicable, the release holds text files and the source
+  tarball only.
+- Earlier runs of these checks, on the tarball 28b15fdd... (before the package
+  stood on its own), also ran the README's install procedure from the release
+  files in an empty directory: sha256sum -c --ignore-missing SHA256SUMS printed
+  OK for all five files and makepkg (-f --noconfirm, without -s and -i) built
+  the package; with PKGBUILD and the tarball only, makepkg stopped (exit 12)
+  because macbook91-hw-fixes.install was missing; with only PKGBUILD and
+  STATUS.txt present, sha256sum -c --ignore-missing printed two OK lines and
+  exited 0, which is why the README asks for the three OK lines. That
+  procedure was not repeated for 4f72b6dd....
+
+Hardware gate for 20261021.01: PASS (2026-10-21, 7.2.11-1-cachyos, on the
+maintainer's instruction, sudo via askpass). The package was built with make
+arch-pkg from the pinned tarball (4f72b6dd…) and installed with pacman -U at
+16:49 over the earlier build of this version, exit 0; DKMS built
+macbook91-applesmc and macbook91-backlight 20261021.01 for 7.2.11-1-cachyos
+and 6.18.55-2-cachyos-lts, and pacman lists bash, coreutils, grep, sed,
+systemd and dkms as its only dependencies. No hand-installed lid hook was
+present. macbook91-hw-verify: pass=23 warn=0 fail=0; the three installed
+driver packages and their DKMS modules pass. The three passes fewer than in
+earlier runs (26) are the two removed migration steps for earlier
+hand-installed files and the removed camera firmware package check. The
+earlier build of this version (tarball 28b15fdd…) gave pass=24 warn=0 fail=0
+the same afternoon.
+- Modules and udev rule: runtime carried over from 20261020.02 and, through it,
+  from 20261020.01, because their sources are byte for byte identical (see
+  above). The runs behind it: macbook91-hw-verify pass=26 warn=0 fail=0 on
+  6.18.55-2-cachyos-lts with 20261020.01-1 (2026-10-20), and pass=26 warn=0
+  fail=0 on 7.2 with the 20261015.01 package after the boot of 2026-10-20.
+  Only the embedded package version follows pkgver.
+- Changed scripts (macbook91-hw-migrate, macbook91-hw-verify,
+  macbook91-lid-wake): macbook91-hw-verify and the migration status ran on
+  the hardware (above). The lid hook ran only in the hermetic suite: no
+  suspend happened after the install. The rebuilt modules load at the next
+  boot; their sources are unchanged.
+
+Not verified (unchanged): suspend/resume, lid close and wake, the backlight
+across a suspend and the persistence of a charge limit below 100 % on 6.18,
+the hardware suspend series, hibernate apply, the Plasma UI of the charge
+limit.
+
+Local build of this release (informational only: not tracked, not one of the
+release files, not reproducible because makepkg output differs per machine;
+SHA256SUMS covers the tracked files):
+c56785a6b598dab69d7d59d26c14ae1a5ea645a5118e70ce5bc3fa7b8a583915  macbook91-hw-fixes-20261021.01-1-any.pkg.tar.zst

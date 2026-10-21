@@ -1,0 +1,436 @@
+{
+  "updated": "2026-10-21T16:52+02:00",
+  "kernel": "6.18.55-2-cachyos-lts",
+  "runs": [
+    {
+      "test": "tests/run-tests.sh (hermetic)",
+      "result": "PASS",
+      "detail": "40 passed, 0 failed (first package skeleton)"
+    },
+    {
+      "test": "make arch-pkg-dev + namcap",
+      "result": "PASS",
+      "detail": "only 'dependency may not be needed' warnings for meta deps"
+    },
+    {
+      "test": "isolated pacman root: install, reinstall, -Qkk, remove (--noscriptlet, -dd)",
+      "result": "PASS"
+    },
+    {
+      "test": "scriptlets sourced in bash",
+      "result": "PASS"
+    },
+    {
+      "test": "live pacman -U local test build",
+      "result": "PASS",
+      "detail": "20261013.01-1, not the delivered package"
+    },
+    {
+      "test": "live macbook91-hw-migrate apply",
+      "result": "BLOCKED",
+      "detail": "classifier B2"
+    },
+    {
+      "test": "suspend series pre-run (systemd path, pre-migration)",
+      "result": "PASS",
+      "detail": "deep idle 10/10, s2idle idle 10/10, deep all 10/10, s2idle all 10/10; logs kept outside the repository"
+    },
+    {
+      "test": "suspend series final ≥100 on candidate",
+      "result": "NOT_RUN"
+    },
+    {
+      "test": "long sleep 30-60 min",
+      "result": "NOT_RUN"
+    },
+    {
+      "test": "reboot with acpi_backlight=native",
+      "result": "BLOCKED",
+      "detail": "B2 + LUKS needs user"
+    },
+    {
+      "test": "real lid close/open",
+      "result": "BLOCKED",
+      "detail": "needs user"
+    },
+    {
+      "test": "hibernate",
+      "result": "BLOCKED",
+      "detail": "no swap target; LUKS needs user"
+    },
+    {
+      "test": "reproducible tarball (two builds)",
+      "result": "NOT_RUN"
+    },
+    {
+      "test": "LTS 6.18 booted",
+      "result": "PASS",
+      "detail": "the maintainer booted 6.18.55-2-cachyos-lts on 2026-10-20 (was NOT_RUN with 'hw-fixes ships no module; siblings: wireless DKMS skips 6.18', superseded: the package ships DKMS modules and wireless-dkms 20261020.02 builds for 6.18); see the 6.18 hw-verify gate below; suspend on 6.18 is NOT_RUN (accepted by the maintainer on 2026-10-20 without a test run)"
+    },
+    {
+      "test": "long sleep deep 45 min (pre-migration, with legacy rule and hook)",
+      "result": "PASS",
+      "detail": "18:14-19:00, all checks ok. Historical: the legacy rule and hook of this run were handled by migration steps that were removed in 20261021.01"
+    },
+    {
+      "test": "tests/run-tests.sh",
+      "result": "PASS",
+      "detail": "67 passed, 0 failed (incl. package contents)"
+    },
+    {
+      "test": "udev rule 60-macbook91-nvme-d3cold.rules matches live NVMe",
+      "result": "PASS",
+      "detail": "udevadm verify ok; udevadm test: rule line 12 sets d3cold_allowed=0; DMI match positive/negative test"
+    },
+    {
+      "test": "migrate apply legacy-d3cold-rule (live)",
+      "result": "PASS",
+      "detail": "20:01; legacy rule + manifest line backed up and removed; d3cold_allowed stays 0; verify 20 PASS 2 WARN 0 FAIL. Historical: this migration step was removed in 20261021.01 and the current tool has no such step"
+    },
+    {
+      "test": "packaged rule alone sets d3cold_allowed=0 at boot",
+      "result": "PASS",
+      "detail": "after reboot 20:2x: legacy rule absent, d3cold_allowed=0. Historical: the legacy rule was removed by the migration step that no longer exists since 20261021.01; the packaged rule itself is unchanged"
+    },
+    {
+      "test": "suspend without d3cold setting",
+      "result": "NOT_APPLICABLE",
+      "detail": "not run on purpose: would risk the root NVMe"
+    },
+    {
+      "test": "backlight native after reboot (ramp, zero, keys, Plasma slider)",
+      "result": "PASS",
+      "detail": "ramp 1389 levels monotone; 0 dark and restored; user: even, dark, F2 re-lights, slider ok"
+    },
+    {
+      "test": "open-lid suspend without hook after a real lid cycle",
+      "result": "FAIL",
+      "detail": "10/10 woke after 4-5 s via GPE 0x6F (20:45-22:06); hook needed"
+    },
+    {
+      "test": "open-lid suspend with packaged hook macbook91-lid-wake (after lid cycle)",
+      "result": "PASS",
+      "detail": "2/2 slept to RTC alarm, gpe6F unchanged"
+    },
+    {
+      "test": "real lid close/open and composite case (user)",
+      "result": "PASS",
+      "detail": "22:17-22:20; open-lid standby wakes only by power button (applespi limitation)"
+    },
+    {
+      "test": "final series >=100 cycles + 30 min sleep",
+      "result": "NOT_RUN",
+      "detail": "two early aborts before the hook fix; scheduled 2026-10-14 02:00 (mb91-final-series.timer)"
+    },
+    {
+      "test": "macbook91_backlight mapping vs reference (15 levels)",
+      "result": "PASS",
+      "detail": "insmod test build; external intel_backlight change followed"
+    },
+    {
+      "test": "PowerDevil drives macbook91_backlight",
+      "result": "PASS",
+      "detail": "after powerdevil restart: SetBrightness 3000 -> level 301 -> raw 87"
+    },
+    {
+      "test": "user perception of perceptual steps (F1/F2, Shift, slider)",
+      "result": "PASS",
+      "detail": "user 2026-10-13 23:35: tested and approved"
+    },
+    {
+      "test": "DKMS build for 7.2.9-cachyos and 6.18.55-cachyos-lts",
+      "result": "PASS",
+      "detail": "pacman -U, dkms status installed for both"
+    },
+    {
+      "test": "macbook91_backlight autoload at boot (DMI alias)",
+      "result": "PASS",
+      "detail": "reboot 08:44: loaded 08:44:41 (version 20261013.01), 1000 levels on intel_backlight"
+    },
+    {
+      "test": "final series 20261014T020007 deep idle 15 s",
+      "result": "PASS",
+      "detail": "30/30 cycles, 0 early wakes, io/audio/camera/kbd ok, WLAN <=3 s, kwarn 0, kerr 0"
+    },
+    {
+      "test": "final series 20261014T021347 deep load 15 s",
+      "result": "PASS",
+      "detail": "30/30 cycles, 0 early wakes, io/audio/camera/kbd ok, WLAN <=3 s, kwarn 0, kerr 0"
+    },
+    {
+      "test": "final series 20261014T022738 s2idle idle 15 s",
+      "result": "PASS",
+      "detail": "20/20 cycles, 0 early wakes, io/audio/camera/kbd ok, WLAN <=3 s, kwarn 0, kerr 0"
+    },
+    {
+      "test": "final series 20261014T023623 s2idle load 15 s",
+      "result": "PASS",
+      "detail": "20/20 cycles, 0 early wakes, io/audio/camera/kbd ok, WLAN <=3 s, kwarn 0, kerr 0"
+    },
+    {
+      "test": "final series 20261014T024511 deep idle 1800 s",
+      "result": "PASS",
+      "detail": "1/1 cycles, 0 early wakes, io/audio/camera/kbd ok, WLAN <=3 s, kwarn 0, kerr 0"
+    },
+    {
+      "test": "final series total on candidate 20261013.01",
+      "result": "PASS",
+      "detail": "101 cycles (61 deep, 40 s2idle) + 30 min deep sleep (1805 s); suspend_stats success 128 fail 0"
+    },
+    {
+      "test": "macbook91-hw-verify --deep as root after the series",
+      "result": "PASS",
+      "detail": "pass=29 warn=0 fail=0"
+    },
+    {
+      "test": "journal 02:00-03:15 (err, kernel warning)",
+      "result": "PASS",
+      "detail": "no nvme/pci/i915 errors; 62 applespi crc mismatch (known, FINDINGS); UFW blocks; kscreenlocker PAM aborts at resume (faillock reset by wrapper)"
+    },
+    {
+      "test": "tests/run-tests.sh with kernel build and PKGDIR_CHECK (release package)",
+      "result": "PASS",
+      "detail": "87 passed, 0 failed"
+    },
+    {
+      "test": "namcap PKGBUILD and release package",
+      "result": "PASS",
+      "detail": "0 errors; 8 'dependency may not be needed' warnings (script and meta deps)"
+    },
+    {
+      "test": "promote-release.sh 20261013.01",
+      "result": "PASS",
+      "detail": "release/20261013.01 sealed, sha256sum -c ok; pkg sha256 ac216cbc..."
+    },
+    {
+      "test": "macbook91-hw-verify --deep as root after reboot",
+      "result": "PASS",
+      "detail": "pass=29 warn=0 fail=0; d3cold_allowed=0"
+    },
+    {
+      "test": "install of the built package with pacman",
+      "result": "PASS",
+      "detail": "DKMS installed for both kernels, verify --deep 29/0/0"
+    },
+    {
+      "test": "tests/run-tests.sh (hermetic, incl. applesmc lock/patch/build, package contents)",
+      "result": "PASS",
+      "detail": "94 passed, 0 failed",
+      "commit": "20261014.01 staged"
+    },
+    {
+      "test": "applesmc prototype: read charge_control_end_threshold",
+      "result": "PASS",
+      "detail": "100, extension applesmc-charge on BAT0"
+    },
+    {
+      "test": "applesmc prototype: BCLM 55 on AC at 62 % stops charging",
+      "result": "PASS",
+      "detail": "1.22 A -> 0 within 15 s, status Full, 90 s stable"
+    },
+    {
+      "test": "applesmc prototype: BCLM 100 resumes charging, 5 rejected",
+      "result": "PASS",
+      "detail": "1.8 A after 15 s; EINVAL"
+    },
+    {
+      "test": "make arch-pkg-dev 20261014.01 + namcap",
+      "result": "PASS",
+      "detail": "namcap: only 'dependency may not be needed'"
+    },
+    {
+      "test": "live pacman -U 20261014.01-1 (local dev build)",
+      "result": "PASS",
+      "detail": "DKMS macbook91-applesmc built for 7.2.9 and 6.18.55-lts"
+    },
+    {
+      "test": "DKMS applesmc loaded from updates/dkms, verify",
+      "result": "PASS",
+      "detail": "modinfo macbook91=charge-limit 20261014.01; verify 27/0/0"
+    },
+    {
+      "test": "PowerDevil restart: no 'Charge thresholds are not supported'",
+      "result": "PASS"
+    },
+    {
+      "test": "Plasma settings show and set the charge limit",
+      "result": "NOT_RUN",
+      "detail": "user check"
+    },
+    {
+      "test": "charge limit below 100 % survives suspend and reboot",
+      "result": "NOT_RUN",
+      "detail": "needs a limit below 100 set before a reboot with the user (LUKS)"
+    },
+    {
+      "test": "autoload of DKMS applesmc after boot",
+      "result": "PASS",
+      "detail": "boot 2026-10-14 12:29:53, 7.2.9-2-cachyos: applesmc registered charge_control_end_threshold on BAT0 at boot, value 100"
+    },
+    {
+      "test": "LTS 6.18 boot with DKMS applesmc",
+      "result": "PASS",
+      "detail": "2026-10-20, 6.18.55-2-cachyos-lts: charge limit readable (BAT0 charge_control_end_threshold 100 %, SMC key BCLM), read not changed; persistence across suspend or reboot stays NOT_RUN"
+    },
+    {
+      "test": "release 20261014.01: make arch-pkg (pinned cb63f3bd…) + tests with package contents",
+      "result": "PASS",
+      "detail": "96 passed, 0 failed; namcap 0 errors"
+    },
+    {
+      "test": "release 20261014.01 install of the built package with pacman, DKMS both kernels, module reloaded, verify",
+      "result": "PASS",
+      "detail": "verify 27/0/0; threshold 100"
+    },
+    {
+      "test": "release 20261020.01: make arch-pkg (pinned 70d1c311…) + tests with package contents",
+      "result": "PASS",
+      "detail": "106 passed, 0 failed; namcap 0 errors (8 dependency warnings); source tarball built twice, identical; vs. 20261015.01 only README.md, docs/FINDINGS.md, VERSION changed"
+    },
+    {
+      "test": "release 20261020.01 with license change: make arch-pkg (pinned da4deeac…) + tests with package contents",
+      "result": "PASS",
+      "detail": "109 passed, 0 failed (3 new license checks); namcap 0 errors (8 dependency warnings); source tarball built twice, identical; vs. 20261015.01 apart from SPDX lines only LICENSE, LICENSES/, README.md, docs/FINDINGS.md, VERSION changed; package sha256 ecf1f4d2…"
+    },
+    {
+      "test": "release 20261020.01 after the GPLv2 section 3 license correction: make arch-pkg (pinned 7a53ba5f…) + tests with package contents",
+      "result": "PASS",
+      "detail": "110 passed, 0 failed (4 license checks); namcap 0 errors (8 dependency warnings); source tarball built twice, identical; vs. 20261015.01 apart from SPDX lines only LICENSE, LICENSES/, README.md, docs/FINDINGS.md, VERSION and two comment lines in macbook91_backlight.c changed; package sha256 50bf62f3…"
+    },
+    {
+      "test": "release 20261020.01 after the English translation: make arch-pkg (pinned b7b5e427…) + tests with package contents",
+      "result": "PASS",
+      "detail": "make check 105 passed, 0 failed; with package contents 110 passed, 0 failed; namcap 0 errors (8 dependency warnings); source tarball built twice, identical; vs. the 7a53ba5f… tarball only README.md and docs/FINDINGS.md changed; package sha256 32ab2af6…"
+    },
+    {
+      "test": "release 20261020.01 install check: sudo pacman -U of all five macbook91 packages, dkms status, pacman -Qkk",
+      "result": "PASS",
+      "detail": "exit 0; macbook91-backlight and macbook91-applesmc 20261020.01 installed for 7.2.11-1-cachyos and 6.18.55-2-cachyos-lts; new modules not loaded"
+    },
+    {
+      "test": "release 20261020.01 runtime checks of the new applesmc/backlight modules (reload, macbook91-hw-verify)",
+      "result": "NOT_RUN",
+      "detail": "carried over: the maintainer did not reload applesmc; module sources identical to 20261015.01 or two comment lines in macbook91_backlight.c; macbook91-hw-verify on 20261015.01 pass=26 warn=0 fail=0 after the boot of 2026-10-20 13:28"
+    },
+    {
+      "test": "6.18 hw-verify gate: 6.18.55-2-cachyos-lts booted, macbook91-hw-verify with macbook91-hw-fixes 20261020.01-1",
+      "result": "PASS",
+      "detail": "maintainer, 2026-10-20: pass=26 warn=0 fail=0; all five DKMS modules (cs4208, facetimehd, wireless, backlight, applesmc) installed for 6.18; charge limit readable (BAT0 charge_control_end_threshold 100 %, SMC key BCLM), read not changed; backlight native intel_backlight with macbook91_backlight in 1001 CIE L* levels; nvme d3cold_allowed=0; keyboard, keyboard light and ambient light present; suspend_stats success=0 fail=0 (no suspend in that boot). The full record is kept outside the repository"
+    },
+    {
+      "test": "6.18 verify tools of the sibling packages (cs4208 20261020.03, wireless 20261020.02, facetimehd)",
+      "result": "PASS",
+      "detail": "same boot: macbook91-audio-verify 31 passed, 0 failed, 2 skipped (jack profile needs headphones, HDMI not connected); macbook91-wireless-verify 0 FAIL 0 WARN (Bluetooth rfkill-blocked, not exercised); macbook91-facetimehd-verify PASS, 0 warnings"
+    },
+    {
+      "test": "6.18 hardware suspend series (deep and s2idle, tools/dev-suspend-series.sh)",
+      "result": "NOT_RUN",
+      "detail": "suspend_stats success=0 in the 2026-10-20 boot: no suspend happened; the earlier series ran on 7.2 and are no evidence for 6.18; accepted by the maintainer on 2026-10-20 without a test run (not tested)",
+      "accepted": "2026-10-20: accepted by the maintainer without a test run. The result stays NOT_RUN: this records the maintainer's decision to accept the open item, not a test result."
+    },
+    {
+      "test": "6.18 real lid close/open and open-lid suspend with macbook91-lid-wake",
+      "result": "NOT_RUN",
+      "detail": "needs the user at the machine; no suspend in the 2026-10-20 boot; accepted by the maintainer on 2026-10-20 without a test run (not tested)",
+      "accepted": "2026-10-20: accepted by the maintainer without a test run. The result stays NOT_RUN: this records the maintainer's decision to accept the open item, not a test result."
+    },
+    {
+      "test": "6.18 backlight level across suspend/resume (macbook91_backlight)",
+      "result": "NOT_RUN",
+      "detail": "no suspend in the 2026-10-20 boot; backlight was only checked at rest (native, 1001 CIE L* levels); accepted by the maintainer on 2026-10-20 without a test run (not tested)",
+      "accepted": "2026-10-20: accepted by the maintainer without a test run. The result stays NOT_RUN: this records the maintainer's decision to accept the open item, not a test result."
+    },
+    {
+      "test": "6.18 charge limit below 100 % survives suspend and reboot",
+      "result": "NOT_RUN",
+      "detail": "the limit was read (100 %), not changed; accepted by the maintainer on 2026-10-20 without a test run (not tested)",
+      "accepted": "2026-10-20: accepted by the maintainer without a test run. The result stays NOT_RUN: this records the maintainer's decision to accept the open item, not a test result."
+    },
+    {
+      "test": "6.18 suspend/resume of the audio, camera and wireless drivers",
+      "result": "NOT_RUN",
+      "detail": "belongs to the sibling packages; no suspend in the 2026-10-20 boot; accepted by the maintainer on 2026-10-20 without a test run (not tested)",
+      "accepted": "2026-10-20: accepted by the maintainer without a test run. The result stays NOT_RUN: this records the maintainer's decision to accept the open item, not a test result."
+    },
+    {
+      "test": "release 20261020.02 (documentation only): make arch-pkg (pinned b5fd2b27…) + tests with package contents",
+      "result": "PASS",
+      "detail": "make check 105 passed, 0 failed; with package contents 110 passed, 0 failed; shellcheck clean; git diff --check clean; namcap 0 errors (8 dependency warnings); source tarball built twice, identical; vs. the 20261020.01 tarball only README.md, docs/FINDINGS.md, VERSION differ; package sha256 fe6b9d24…"
+    },
+    {
+      "test": "release 20261020.02 module identity: applesmc and backlight built from the package's DKMS trees against 6.18.55-2-cachyos-lts and 7.2.11-1-cachyos headers, compared with the installed 20261020.01 modules",
+      "result": "PASS",
+      "detail": "scratch build, no root, 0 warnings; srcversion (applesmc 5A3B81D9… on 6.18, C1A411C9… on 7.2; backlight 5F5B67A0… on both), vermagic, .text, .rodata, .data, .init.text and .exit.text identical; only the embedded package version differs (backlight version, applesmc macbook91 tag: 20261020.02 instead of 20261020.01)"
+    },
+    {
+      "test": "release 20261020.02 promote: packaging/promote-release.sh, STATUS.txt filled in, --seal, sha256sum -c SHA256SUMS",
+      "result": "PASS",
+      "detail": "release/20261020.02 sealed (no longer kept in the tree); release/20261015.01 pruned by the retention rule (older releases are not kept in the tree); status at promotion CANDIDATE: not tagged, pushed, published or installed (installed since, see the install entry below)"
+    },
+    {
+      "test": "release 20261020.02 runtime of the build itself (install, DKMS build by DKMS, module reload, macbook91-hw-verify)",
+      "result": "NOT_RUN",
+      "detail": "carried over from 20261020.01: module code identical (see module identity); hw-verify on 6.18 pass=26 warn=0 fail=0 was run with 20261020.01-1. The package is installed since 2026-10-20 19:01-19:04 (install entry below), but the new backlight build is not loaded yet (loaded 20261020.01, on disk 20261020.02) and no reload or macbook91-hw-verify run with it has happened"
+    },
+    {
+      "test": "release 20261020.02 install of the built packages: sudo pacman -U of the four packages, dkms status, pacman -Qkk, loaded against on-disk modules",
+      "result": "PASS",
+      "detail": "2026-10-20 19:01-19:04, run by the maintainer on 6.18.55-2-cachyos-lts, exit 0: macbook91-hw-fixes 20261020.02-1 (sha256 fe6b9d249a396335bd41cc21f600e91b80b44b9db13c53a99dd81082327a5c37) upgraded from 20261020.01-1; macbook91-cs4208-dkms 20261020.03-1 (96a58562…) and macbook91-wireless-dkms 20261020.02-1 (d1f7176f…) reinstalled over the pre-re-pin builds; macbook91-facetimehd-dkms 20261020.02-1 (f5c67b96…) upgraded from 20261020.01-1. DKMS installed all five modules (cs4208 20261020.03, wireless 20261020.02, facetimehd 20261020.02, backlight 20261020.02, applesmc 20261020.02) for 6.18.55-2-cachyos-lts and 7.2.11-1-cachyos, initramfs rebuilt for both; pacman -Qkk 0 altered files in all four packages. Loaded against on disk on 6.18: snd_hda_codec_cs420x 20261020.03+7fc96add428d9fce, brcmfmac, brcmfmac_wcc and hci_uart 20261020.02+2eed8ec6343efe4f equal the on-disk modules; applesmc srcversion 5A3B81D97F1C91FE86F89E1 loaded equals on disk, its charge-limit tag on disk is 20261020.02; macbook91_backlight is loaded as 20261020.01 and on disk 20261020.02, macbook91_facetimehd loaded 20261020.01+949038441c655353 and on disk 20261020.02+949038441c655353 (previous builds, same source). The new backlight and facetimehd builds load at the next boot or module reload; no runtime check of them has run (NOT VERIFIED, carried over, same source identity). The 6.18 suspend series, lid wake, backlight across suspend and charge-limit persistence stay NOT_RUN (entries above)."
+    },
+    {
+      "test": "release 20261021.01 (candidate, the tidy-up after 20261020.02): tests/run-tests.sh in the working repository and in a copy that holds only the files of the public tree",
+      "result": "PASS",
+      "detail": "97 passed, 0 failed in both trees, identical PASS lines (re-run after the second review pass with the same result; 105 passed before the checks for the removed migration steps went; package-content checks not run for this state); the source tarball differs from the 20261020.02 tarball only in README.md, docs/FINDINGS.md, Makefile, VERSION, src/macbook91-hw-migrate, src/macbook91-hw-verify, sleep/macbook91-lid-wake and the added LICENSES/GPL-3.0-or-later.txt, the kernel sources and the udev rule are byte-identical"
+    },
+    {
+      "test": "release 20261021.01 (candidate, the tidy-up after 20261020.02): hardware gate for the removal of the migration steps for earlier hand-installed files (install the package, run macbook91-hw-verify)",
+      "result": "PASS",
+      "detail": "2026-10-21 15:5x, 7.2.11-1-cachyos, on the maintainer's instruction: package built with make arch-pkg from the pinned tarball 28b15fdd…, installed with pacman -U (DKMS applesmc and backlight 20261021.01 built for 7.2.11-1-cachyos and 6.18.55-2-cachyos-lts); no hand-installed lid hook present; macbook91-hw-verify pass=24 warn=0 fail=0 (26 before: the two removed migration steps no longer report). The lid hook did not run at a real suspend (no suspend after the install); the rebuilt modules load at the next boot, sources unchanged."
+    },
+    {
+      "test": "release 20261021.01, standalone package (no dependencies on the driver packages): make dist (pinned 4f72b6dd…), make arch-pkg, tests/run-tests.sh with and without package contents, namcap, ShellCheck",
+      "result": "PASS",
+      "detail": "2026-10-21 16:4x on the committed tree: tests/run-tests.sh 99 passed, 0 failed (two checks are new: installed driver packages are checked, missing driver packages are reported as optional and not as FAIL); 104 passed, 0 failed with the five package-content checks on the extracted package; make dist gives the tarball pinned in the PKGBUILD (sha256 4f72b6dd…); the package declares bash, coreutils, grep, sed, systemd and dkms as its only dependencies; namcap on the package: 0 errors, 5 dependency warnings (coreutils, grep, sed, systemd, dkms); ShellCheck at warning level and git diff --check clean."
+    },
+    {
+      "test": "release 20261021.01, standalone package: hardware gate (reinstall the package, run macbook91-hw-verify)",
+      "result": "PASS",
+      "detail": "2026-10-21 16:49-16:52, 7.2.11-1-cachyos, on the maintainer's instruction (install and verify, sudo via askpass): package built with make arch-pkg from the pinned tarball 4f72b6dd… (package sha256 c56785a6…), installed over the earlier build of 20261021.01-1 with pacman -U, exit 0; DKMS rebuilt macbook91-applesmc and macbook91-backlight 20261021.01 for 7.2.11-1-cachyos and 6.18.55-2-cachyos-lts; pacman lists bash, coreutils, grep, sed, systemd and dkms as the dependencies. macbook91-hw-verify pass=23 warn=0 fail=0: one pass fewer than the 24 of the earlier build because the check for the camera firmware package is removed; the three installed driver packages and their DKMS modules pass. Not run: a host without the driver packages (only the hermetic test covers it), the lid hook at a real suspend, the rebuilt modules (they load at the next boot; their sources are unchanged)."
+    },
+    {
+      "test": "release 20261021.01: tools/dev-suspend-series.sh and tools/dev-backlight-check.sh after the tidy-up edits (headers, SUDO_USER, log directory)",
+      "result": "NOT_RUN",
+      "detail": "needs root and a suspend at the machine; bash -n and shellcheck are clean"
+    },
+    {
+      "test": "release 20261021.01: make dist (pinned 28b15fdd…), make arch-pkg, tests/run-tests.sh with package contents, namcap, ShellCheck",
+      "result": "PASS",
+      "detail": "2026-10-21 after the round-2 text fixes: 102 passed, 0 failed with the five package-content checks on the extracted package; source tarball built twice, identical (sha256 28b15fdd…, differs from the first tarball of this candidate in README.md only); namcap 0 errors for the package and no finding for the PKGBUILD, 8 dependency warnings (script and meta deps); ShellCheck at warning level, bash -n and git diff --check clean; package sha256 fed577c4… (local build, not tracked, not reproducible)"
+    },
+    {
+      "test": "release 20261021.01 promote: packaging/promote-release.sh with the maintainer's release gate, STATUS.txt filled in, --seal, sha256sum -c SHA256SUMS",
+      "result": "PASS",
+      "detail": "release/20261021.01 sealed; the gate (test scripts of the maintainer and the export guard over the tree) passed; release/20261020.01 and release/20261020.02 were removed from the tree in their own commit before the promotion (older releases are not part of this repository); status at promotion CANDIDATE: not tagged, pushed, published or installed; the directory was refreshed in place after each review pass (README.md changed the tarball) and sealed again"
+    },
+    {
+      "test": "release 20261021.01 install procedure of the README: the release files in an empty directory, sha256sum -c --ignore-missing SHA256SUMS, makepkg without -s and -i; and the same with PKGBUILD and the tarball only",
+      "result": "PASS",
+      "detail": "2026-10-21 after the round-2 text fixes, tarball 28b15fdd…, files taken from the committed release directory: with PKGBUILD, .SRCINFO, macbook91-hw-fixes.install, STATUS.txt, SHA256SUMS and the tarball in an empty directory sha256sum -c --ignore-missing prints OK for all five files (exit 0) and makepkg -f --noconfirm (no -s, no -i) builds macbook91-hw-fixes 20261021.01-1 (exit 0); the package contents equal those of the package built by make arch-pkg except .BUILDINFO, .MTREE and the build date in .PKGINFO, so the package checksum is not reproducible. With PKGBUILD and the tarball only, makepkg stops (exit 12): the install file macbook91-hw-fixes.install does not exist. With only PKGBUILD and STATUS.txt present, sha256sum -c --ignore-missing prints two OK lines and exits 0, which is why the README asks for the three OK lines and not only for the exit status. The package was built, not installed."
+    },
+    {
+      "test": "release 20261021.01 check of the published tree after the round-2 text fixes: file inventory, deny-list scan (strict), suite in both trees, reproducibility of the tarball, links, identity of the module payload",
+      "result": "PASS",
+      "detail": "2026-10-21 after the round-2 text fixes, run on the committed state before this record: the published tree has one complete release directory and its files equal the committed ones in mode and blob id; deny-list scan (strict) over the file tree and over the messages of the tidy-up commits that change published files: no hit, no unused allow entry (the allow list names whole lines in the matching files only and was not changed in this round; its negative control from the first pass, an extra address line in a copied upstream file and a different maintainer line in a PKGBUILD giving 2 hits, was not re-run); tests/run-tests.sh gives 97 passed, 0 failed in the working repository and in a copy of the published tree with identical PASS lines (the suite has no blocked counter), and 102 passed, 0 failed with the five package-content checks on the extracted package; make dist in three copies (working repository, copy of the published tree, second working copy) gives the tarball 28b15fdd…, equal to the PKGBUILD pin, SHA256SUMS and the release file; all relative links and paths cited in docs/*.json resolve; the two development tools pass bash -n and ShellCheck; kernel/, udev/, LICENSE and the GPL-2.0 texts (13 files) are byte for byte equal to 20261020.02, the Makefile is equal after comment removal, the three scripts differ on purpose (+7/-81, +2/-4, +0/-5 lines); no package assets in this release (text files and the source tarball only)"
+    },
+    {
+      "test": "release 20261021.01 round-2 text fixes: AI assistance section of the README against the text shared by the four repositories; install text (checksum step, git checkout for make dist, firmware route)",
+      "result": "PASS",
+      "detail": "2026-10-21: the AI assistance section of the README equals the shared text character for character (compared by script); the install section names the three files that must read OK, says that make dist needs a git checkout and that the firmware package is built from packaging/firmware/ of the camera repository (superseded later on 2026-10-21: the package no longer depends on the driver packages, and the README no longer names a firmware package); the changelog and the structure notes state that the release tool keeps the two newest releases; the sleep-check change is worded as what the diff shows (a hand-installed hook was INFO before, a missing hook was already a FAIL). Text checks only: the changed scripts were not run on hardware (see the NOT_RUN entries)"
+    },
+    {
+      "test": "release 20261021.01 runtime of the modules and the udev rule (install, DKMS build by DKMS, module reload, macbook91-hw-verify)",
+      "result": "NOT_RUN",
+      "detail": "carried over from 20261020.02 and 20261020.01: kernel/ and udev/ are byte for byte identical to 20261020.02, only the embedded package version follows pkgver; macbook91-hw-verify pass=26 warn=0 fail=0 on 6.18.55-2-cachyos-lts was run with 20261020.01-1. The suite compiles both modules against the headers of the running kernel; that build was not compared with the installed modules for this release."
+    }
+  ]
+}

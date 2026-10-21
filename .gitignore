@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Build and test output.
+/build/
+/dist/
+
+# Raw logs anywhere (journal dumps hold host names and network identifiers).
+*.log
+
+# A makepkg run directly in packaging/arch, and built packages anywhere.
+packaging/arch/pkg/
+packaging/arch/src/
+packaging/arch/*.tar
+*.pkg.tar.zst
+
+# Patched applesmc sources and builds (make -C kernel/applesmc sources / all).
+kernel/applesmc/build/
+kernel/applesmc/[0-9]*.[0-9]*/

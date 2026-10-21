@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Maintainer: Weegee <748975+Weegee@users.noreply.github.com>
+#
+# Hardware fixes for the Apple MacBook9,1 (A1534) outside audio, camera and
+# wireless: a tool that sets the kernel parameter for the native backlight and,
+# when named, two optional settings, the perceptual backlight and charge-limit
+# DKMS modules, the NVMe udev rule, the lid sleep hook and a verify tool for the
+# machine. It needs none of the driver packages. See README.md and docs/.
+
+pkgbase=macbook91-hw-fixes
+pkgname=(macbook91-hw-fixes)
+pkgver=20261021.01
+pkgrel=1
+pkgdesc="Hardware fixes and checks for the Apple MacBook9,1 (A1534): backlight, charge limit, NVMe, lid wake"
+arch=('any')
+url='https://github.com/Weegee/macbook91-hw-fixes-pub'
+# Tools, hook, udev rule, UPSTREAM.lock and docs are GPL-3.0-or-later, the
+# modules' Makefiles and dkms.conf GPL-2.0-or-later (GPLv2 section 3), the
+# module sources (macbook91_backlight.c, patched applesmc.c) GPL-2.0-only;
+# README.md maps every path.
+license=('GPL-3.0-or-later' 'GPL-2.0-or-later' 'GPL-2.0-only')
+
+# make and patch, for package() (it applies the applesmc patch).
+makedepends=('make' 'patch')
+
+# One source: the reproducible tarball `make dist` writes to dist/. The
+# checksum is pinned at release time; `make arch-pkg` refuses a tarball that
+# does not match it.
+source=("$pkgbase-$pkgver.tar")
+sha256sums=('4f72b6dd9d5c0b726889b755cc936f6c13248c09dcd9d783cf950aa64e42a5f0')
+
+# Dependencies sit in package_*() as in the driver packages. This package
+# stands on its own: the audio, camera and wireless driver packages are
+# separate and not required.
+package_macbook91-hw-fixes() {
+    depends=('bash' 'coreutils' 'grep' 'sed' 'systemd' 'dkms')
+    optdepends=('limine-mkinitcpio-hook: lets macbook91-hw-migrate apply kernel parameters on Limine'
+                'nvme-cli: lets macbook91-hw-verify read the NVMe health log (as root)')
+    install="$pkgbase.install"
+
+    cd "$pkgbase-$pkgver" || exit 1
+    make PREFIX=/usr DESTDIR="$pkgdir" install
+}

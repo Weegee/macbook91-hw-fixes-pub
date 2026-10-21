@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# macbook91-hw-fixes: keep the Apple NVMe (106b:2003) root port in D0 during
+# suspend on the MacBook9,1.
+#
+# d3cold_allowed=0 on the NVMe also clears bridge_d3 on its PCIe root port
+# (drivers/pci/pci.c, pci_dev_check_d3cold), so system suspend leaves the port
+# in D0 instead of putting it into D3hot. This is the long-standing workaround
+# for 2016 MacBooks whose NVMe does not come back after resume. The NVMe itself
+# never uses runtime PM (the nvme driver keeps its runtime-PM reference).
+#
+# Check: cat /sys/bus/pci/devices/0000:01:00.0/d3cold_allowed  ->  0
+# The package's install script sets the same value on the running system.
+ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x106b", ATTR{device}=="0x2003", \
+  ATTR{[dmi/id]sys_vendor}=="Apple Inc.", ATTR{[dmi/id]product_name}=="MacBook9,1", \
+  ATTR{d3cold_allowed}="0"

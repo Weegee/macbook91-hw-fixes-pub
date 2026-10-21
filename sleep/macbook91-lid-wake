@@ -1,0 +1,41 @@
+#!/usr/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# macbook91-hw-fixes: lid wake source around suspend on the MacBook9,1.
+#
+# Once the lid has been closed and opened, every later suspend with the lid
+# open wakes again after a few seconds through GPE 0x6F (LID0's wake GPE).
+# So before suspend LID0 may only wake the machine when the lid is closed
+# (opening it is then the wake-up); with the lid open it is switched off and
+# the power button wakes (applespi cannot wake the machine on a key press).
+# After resume LID0 is always switched on again, otherwise a later lid-closed
+# suspend would not wake on opening.
+#
+# systemd-sleep calls this with "pre"|"post" and the sleep type. Writing
+# "LID0" to /proc/acpi/wakeup toggles, so the state is read first.
+set -u
+ROOT=${MACBOOK91_SYSROOT:-}
+WAKEUP=$ROOT/proc/acpi/wakeup
+LID=$ROOT/proc/acpi/button/lid/LID0/state
+
+[ "$(cat "$ROOT/sys/class/dmi/id/product_name" 2>/dev/null)" = "MacBook9,1" ] || exit 0
+
+log() { if [ -n "$ROOT" ]; then echo "$*" >>"$ROOT/lid-wake.log"; else logger -t macbook91-lid-wake "$*"; fi; }
+enabled() { grep -qE '^LID0[[:space:]].*\*enabled' "$WAKEUP"; }
+set_lid0() { # set_lid0 on|off
+	if [ "$1" = on ]; then enabled || echo LID0 >"$WAKEUP"; else ! enabled || echo LID0 >"$WAKEUP"; fi
+}
+
+case ${1:-} in
+pre)
+	if grep -q 'open' "$LID" 2>/dev/null; then
+		set_lid0 off
+		log "pre ${2:-}: lid open, LID0 wake off (power button wakes)"
+	else
+		set_lid0 on
+		log "pre ${2:-}: lid closed or unknown, LID0 wake on (opening wakes)"
+	fi ;;
+post)
+	set_lid0 on
+	if enabled; then log "post ${2:-}: LID0 wake on"; else log "post ${2:-}: could not switch LID0 wake on"; fi ;;
+esac
+exit 0

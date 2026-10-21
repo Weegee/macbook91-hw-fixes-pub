@@ -1,0 +1,227 @@
+#!/usr/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# macbook91-hw-verify - checks that the hardware fixes for an Apple MacBook9,1
+# are in place and in effect. Read-only; run as a user or as root (root adds
+# the NVMe health log).
+#
+#   macbook91-hw-verify          this package and the state of the machine
+#   macbook91-hw-verify --deep   also run the verify tools of the audio,
+#                                camera and wireless packages, where installed
+#
+# Prints PASS/WARN/FAIL/INFO lines and a RESULT line.
+# Exit: 0 no FAIL, 1 at least one FAIL, 2 usage, 3 not a MacBook9,1.
+set -u
+
+ROOT=${MACBOOK91_SYSROOT:-}
+DEEP=0
+case ${1:-} in
+"") ;;
+--deep) DEEP=1 ;;
+-h | --help) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+*) echo "usage: macbook91-hw-verify [--deep]" >&2; exit 2 ;;
+esac
+
+pass=0 warn=0 fail=0
+PASS() { pass=$((pass + 1)); printf 'PASS %s\n' "$*"; }
+WARN() { warn=$((warn + 1)); printf 'WARN %s\n' "$*"; }
+FAIL() { fail=$((fail + 1)); printf 'FAIL %s\n' "$*"; }
+INFO() { printf 'INFO %s\n' "$*"; }
+rd() { cat "$ROOT$1" 2>/dev/null; }
+
+product=$(rd /sys/class/dmi/id/product_name)
+vendor=$(rd /sys/class/dmi/id/sys_vendor)
+if [ "$vendor" != "Apple Inc." ] || [ "$product" != "MacBook9,1" ]; then
+	echo "INFO machine is '${vendor:-?} ${product:-?}', not an Apple MacBook9,1: nothing to check"
+	exit 3
+fi
+PASS "dmi: Apple MacBook9,1"
+
+# --- packages and their modules for the running kernel
+if v=$(pacman -Q macbook91-hw-fixes 2>/dev/null); then PASS "package: $v"; else FAIL "package: macbook91-hw-fixes is not installed"; fi
+# The driver packages are separate and optional: checked only where installed.
+drivers=""
+for p in macbook91-cs4208-dkms macbook91-facetimehd-dkms macbook91-wireless-dkms; do
+	if v=$(pacman -Q "$p" 2>/dev/null); then
+		PASS "package: $v"
+		drivers="$drivers ${p%-dkms}"
+	else
+		INFO "package: $p not installed (optional, a separate package)"
+	fi
+done
+kr=$(uname -r)
+# Kernel series with a patched applesmc source: one directory each in the
+# installed DKMS tree (the same list as its dkms.conf BUILD_EXCLUSIVE_KERNEL).
+series=$(sed -nE 's/^([0-9]+\.[0-9]+)\..*/\1/p' <<<"$kr")
+smc_src=no
+[ -n "$series" ] && compgen -G "$ROOT/usr/src/macbook91-applesmc-*/$series/applesmc.c" >/dev/null && smc_src=yes
+if command -v dkms >/dev/null; then
+	st=$(dkms status -k "$kr" 2>/dev/null)
+	for m in $drivers macbook91-backlight; do
+		if grep -qE "^$m/[^,]+, $kr, [^:]+: installed" <<<"$st"; then
+			PASS "dkms: $m installed for $kr"
+		else
+			FAIL "dkms: $m not installed for the running kernel $kr"
+		fi
+	done
+	# Built only for kernel series with a patched source (dkms.conf BUILD_EXCLUSIVE_KERNEL).
+	if grep -qE "^macbook91-applesmc/[^,]+, $kr, [^:]+: installed" <<<"$st"; then
+		PASS "dkms: macbook91-applesmc installed for $kr"
+	elif [ "$smc_src" = yes ]; then
+		FAIL "dkms: macbook91-applesmc not installed for the running kernel $kr"
+	else
+		WARN "dkms: macbook91-applesmc has no source for Linux ${series:-$kr}; in-tree applesmc runs, the charge limit cannot be changed (a limit set earlier may still apply)"
+	fi
+fi
+
+# --- charge limit (SMC key BCLM through macbook91-applesmc)
+thr=$(rd /sys/class/power_supply/BAT0/charge_control_end_threshold)
+if [[ $thr =~ ^[0-9]+$ ]]; then
+	PASS "charge limit: BAT0 charge_control_end_threshold $thr % (SMC key BCLM)"
+elif [ "$smc_src" = yes ]; then
+	WARN "charge limit: BAT0 has no charge_control_end_threshold (reboot, or: sudo modprobe -r applesmc && sudo modprobe applesmc)"
+else
+	WARN "charge limit: not available on Linux ${series:-$kr} (in-tree applesmc); a limit set earlier may still apply, boot a kernel the package has a source for to change it"
+fi
+
+# --- migration steps
+mig=${MACBOOK91_MIGRATE:-macbook91-hw-migrate}
+if out=$("$mig" status 2>/dev/null); then
+	while read -r step state _; do
+		case $state in
+		applied | done) PASS "migration: $step $state" ;;
+		pending) WARN "migration: $step pending (run: sudo macbook91-hw-migrate apply)" ;;
+		optional) INFO "migration: $step not applied (optional)" ;;
+		partial) FAIL "migration: $step stopped half-way (run: sudo macbook91-hw-migrate rollback $step)" ;;
+		foreign) WARN "migration: $step found content it does not know; left alone, check by hand" ;;
+		unsupported) INFO "migration: $step not supported on this boot setup" ;;
+		esac
+	done <<<"$out"
+else
+	FAIL "migration: $mig status failed"
+fi
+
+# --- backlight
+cmdline=" $(rd /proc/cmdline) "
+if [ -d "$ROOT/sys/class/backlight/intel_backlight" ]; then
+	max=$(rd /sys/class/backlight/intel_backlight/max_brightness)
+	if [ -e "$ROOT/sys/class/backlight/acpi_video0" ]; then
+		FAIL "backlight: intel_backlight and acpi_video0 both registered; desktops may drive the wrong one"
+	elif [ "${max:-0}" -ge 100 ]; then
+		PASS "backlight: native intel_backlight, $((max + 1)) levels, 0 switches the backlight off"
+		if [ "$(rd /sys/class/backlight/macbook91_backlight/type)" = platform ]; then
+			PASS "backlight: macbook91_backlight drives it in $(($(rd /sys/class/backlight/macbook91_backlight/max_brightness) + 1)) perceptual (CIE L*) levels"
+		else
+			FAIL "backlight: macbook91_backlight missing, desktops step intel_backlight linearly (run: sudo modprobe macbook91_backlight)"
+		fi
+	else
+		WARN "backlight: intel_backlight has only ${max:-?} as maximum"
+	fi
+elif [ -e "$ROOT/sys/class/backlight/acpi_video0" ]; then
+	if [[ $cmdline == *" acpi_backlight=native "* ]]; then
+		FAIL "backlight: acpi_backlight=native is on the command line but acpi_video0 is in use"
+	elif grep -qE '^KERNEL_CMDLINE\[default\].*acpi_backlight=native' "$ROOT/etc/default/limine" 2>/dev/null; then
+		WARN "backlight: acpi_video0 (0..90 %, 91 levels); acpi_backlight=native takes effect after a reboot"
+	else
+		WARN "backlight: acpi_video0 reaches only 90 % in 91 levels (run: sudo macbook91-hw-migrate apply, then reboot)"
+	fi
+else
+	FAIL "backlight: no backlight device"
+fi
+
+# --- sleep
+ms=$(rd /sys/power/mem_sleep)
+INFO "sleep: mem_sleep '$ms', suspend_stats success=$(rd /sys/power/suspend_stats/success) fail=$(rd /sys/power/suspend_stats/fail)"
+f=$(rd /sys/power/suspend_stats/fail)
+if [ "${f:-0}" -gt 0 ]; then
+	WARN "sleep: $f failed suspend attempts this boot, last: $(rd /sys/power/suspend_stats/last_failed_dev) $(rd /sys/power/suspend_stats/last_failed_step)"
+fi
+wake=$(rd /proc/acpi/wakeup)
+if grep -qE '^LID0[[:space:]].*\*enabled' <<<"$wake"; then
+	PASS "wakeup: LID0 enabled"
+else
+	FAIL "wakeup: LID0 is not enabled; opening the lid will not wake the machine"
+fi
+# SPIT is applespi's wake GPE; applespi cannot wake the machine on a key press
+# either way (docs/FINDINGS.md), so its state is only reported.
+if grep -qE '^SPIT[[:space:]].*\*enabled' <<<"$wake"; then
+	INFO "wakeup: SPIT enabled (keyboard and touchpad cannot wake the machine; the power button does)"
+else
+	INFO "wakeup: SPIT disabled (keyboard and touchpad cannot wake the machine either way; the power button does)"
+fi
+if [ -x "$ROOT/usr/lib/systemd/system-sleep/macbook91-lid-wake" ]; then
+	PASS "sleep: hook macbook91-lid-wake switches LID0 wake off for open-lid suspend"
+else
+	FAIL "sleep: no lid hook; after a lid cycle every open-lid suspend wakes again at once (reinstall macbook91-hw-fixes)"
+fi
+[[ $cmdline == *" pcie_aspm=force "* ]] && INFO "pcie: pcie_aspm=force set (the camera and wireless packages were validated with it)"
+
+# --- NVMe
+nv=""
+for d in "$ROOT"/sys/bus/pci/devices/*; do
+	[ "$(cat "$d/vendor" 2>/dev/null)" = 0x106b ] && [ "$(cat "$d/device" 2>/dev/null)" = 0x2003 ] && nv=$d
+done
+if [ -n "$nv" ] && [ "$(basename "$(readlink "$nv/driver" 2>/dev/null)")" = nvme ]; then
+	PASS "nvme: Apple 106b:2003 at $(basename "$nv") bound to nvme"
+else
+	FAIL "nvme: Apple 106b:2003 not found or not bound to nvme"
+fi
+if [ -n "$nv" ]; then
+	d3=$(cat "$nv/d3cold_allowed" 2>/dev/null)
+	if [ "$d3" = 0 ]; then
+		PASS "nvme: d3cold_allowed=0, its root port stays in D0 during suspend"
+	else
+		FAIL "nvme: d3cold_allowed=${d3:-?}; the root port may enter D3 during suspend (udev rule 60-macbook91-nvme-d3cold.rules missing or not applied)"
+	fi
+fi
+if [ "$(id -u)" = 0 ] && command -v nvme >/dev/null && [ -z "$ROOT" ]; then
+	cw=$(nvme smart-log /dev/nvme0 2>/dev/null | sed -n 's/^critical_warning[[:space:]]*: *//p')
+	if [ "$cw" = 0 ]; then PASS "nvme: smart critical_warning 0"; else FAIL "nvme: smart critical_warning '${cw:-unreadable}'"; fi
+fi
+if [ -z "$ROOT" ] && [ -z "$(journalctl -k -b -q -n 1 --no-pager 2>/dev/null)" ]; then
+	INFO "nvme: kernel journal not readable as $(id -un); run as root for this check"
+elif errs=$(journalctl -k -b -p err --no-pager -q 2>/dev/null); then
+	n=$(grep -ciE 'nvme' <<<"$errs")
+	if [ "$n" = 0 ]; then PASS "nvme: no kernel errors this boot"; else FAIL "nvme: $n kernel error lines this boot (journalctl -k -b -p err)"; fi
+fi
+
+# --- keyboard, keyboard light, ambient light
+if [ -e "$ROOT/sys/bus/spi/drivers/applespi/spi-APP000D:00" ]; then
+	PASS "keyboard: applespi bound (iso_layout=$(rd /sys/module/applespi/parameters/iso_layout), fnmode=$(rd /sys/module/applespi/parameters/fnmode))"
+else
+	FAIL "keyboard: applespi is not bound to spi-APP000D:00"
+fi
+# applespi cannot tell ISO from ANSI; the console keymap hints at the keyboard.
+km=$(sed -nE 's/^KEYMAP="?([^"]*)"?$/\1/p' "$ROOT/etc/vconsole.conf" 2>/dev/null)
+if [[ $(rd /sys/module/applespi/parameters/iso_layout) == [N0] ]] &&
+	[[ $km =~ ^(mac-)?(de|at|ch|fr|be|uk|gb|es|it|pt|nl|se|sv|fi|no|dk|is|ie|pl|cz|sk|hu)([-_]|$) ]]; then
+	WARN "keyboard: keymap '$km' suggests an ISO keyboard but applespi iso_layout is off, so ^ and < are swapped (run: sudo macbook91-hw-migrate apply keyboard-iso)"
+fi
+if [ -e "$ROOT/sys/class/leds/spi::kbd_backlight/max_brightness" ]; then
+	PASS "keyboard light: spi::kbd_backlight 0..$(rd /sys/class/leds/spi::kbd_backlight/max_brightness)"
+else
+	FAIL "keyboard light: spi::kbd_backlight missing"
+fi
+als=""
+for d in "$ROOT"/sys/bus/iio/devices/iio:device*; do
+	[ "$(cat "$d/name" 2>/dev/null)" = acpi-als ] && als=$(basename "$d")
+done
+if [ -n "$als" ]; then PASS "ambient light: acpi-als at $als"; else WARN "ambient light: acpi-als not found"; fi
+
+# --- hibernation
+res=$(rd /sys/power/resume)
+if [ -n "$res" ] && [ "$res" != 0:0 ]; then
+	INFO "hibernate: resume device $res offset $(rd /sys/power/resume_offset)"
+else
+	INFO "hibernate: no resume device configured"
+fi
+
+# --- the driver packages' own checks, where installed
+if [ "$DEEP" = 1 ]; then
+	for t in macbook91-audio-verify macbook91-facetimehd-verify macbook91-wireless-verify; do
+		if ! command -v "$t" >/dev/null; then INFO "deep: $t not installed (optional)"; continue; fi
+		if "$t" >/dev/null 2>&1; then PASS "deep: $t"; else FAIL "deep: $t failed (run it for details)"; fi
+	done
+fi
+
+printf 'RESULT pass=%d warn=%d fail=%d\n' "$pass" "$warn" "$fail"
+[ "$fail" -eq 0 ]

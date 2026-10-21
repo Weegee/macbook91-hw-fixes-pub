@@ -1,0 +1,342 @@
+#!/usr/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# macbook91-hw-migrate - sets the kernel parameter the package relies on and,
+# when named, two optional settings on an Apple MacBook9,1. Every change is
+# backed up, recorded and reversible.
+#
+#   macbook91-hw-migrate status            what each step finds now
+#   macbook91-hw-migrate plan              what apply would change (dry run)
+#   macbook91-hw-migrate apply [ID...]     apply pending default steps, or the
+#                                          named ones (root)
+#   macbook91-hw-migrate rollback [ID...]  undo applied steps, newest first (root)
+#
+# Default step: backlight-native.
+# Optional, only when named: keyboard-iso (applespi iso_layout=1 for ISO
+# keyboards), hibernate (swap file on its own Btrfs subvolume @swap behind
+# zram, resume= and resume_offset= on the kernel command line).
+#
+# A file is only changed when it has the shape this tool expects; anything
+# else is reported as "foreign" and left alone.
+# Exit: 0 ok, 1 a step failed, 2 usage, 3 not a MacBook9,1.
+set -uo pipefail
+
+ROOT=${MACBOOK91_SYSROOT:-}
+STATE=$ROOT/var/lib/macbook91-hw-fixes
+# Rebuilds /boot/limine.conf (and its enrolled hash) from /etc/default/limine.
+REGEN=${MACBOOK91_REGEN:-limine-mkinitcpio}
+STEPS=(backlight-native)
+OPTIONAL=(keyboard-iso hibernate)
+ALL=("${STEPS[@]}" "${OPTIONAL[@]}")
+
+ISO_CONF=$ROOT/etc/modprobe.d/macbook91-applespi.conf
+ISO_PARAM=$ROOT/sys/module/applespi/parameters/iso_layout
+LIMINE_DEFAULT=$ROOT/etc/default/limine
+BACKLIGHT_ARG=acpi_backlight=native
+FSTAB=$ROOT/etc/fstab
+SWAP_MARK="# macbook91-hw-fixes: hibernation (macbook91-hw-migrate rollback hibernate removes it)"
+
+RUN_ID=$(date +%Y%m%dT%H%M%S)-$$
+say() { printf '%s\n' "$*"; }
+err() { printf 'macbook91-hw-migrate: %s\n' "$*" >&2; }
+sha() { sha256sum "$1" 2>/dev/null | cut -d' ' -f1; }
+record() { printf '%s\n' "$STATE/applied/$1"; }
+is_applied() { [ -f "$(record "$1")" ]; }
+rec_get() { sed -n "s/^$2=//p" "$(record "$1")" 2>/dev/null | head -n1; }
+
+describe() {
+	case $1 in
+	keyboard-iso) say "optional: applespi iso_layout=1 for ISO keyboards (German and most European layouts; without it ^ and < are swapped; the driver cannot detect the layout)" ;;
+	backlight-native) say "kernel parameter $BACKLIGHT_ARG in /etc/default/limine (acpi_video0 reaches only 90 % in 91 steps; native: full range, 0 = off)" ;;
+	hibernate) say "optional: swap file /swap/swapfile on subvolume @swap (priority below zram), resume= and resume_offset= for hibernation" ;;
+	esac
+}
+
+# detect ID -> applied (by this tool) | partial (apply stopped half-way) |
+#              pending | done (nothing to do) |
+#              foreign (unknown content, left alone) | unsupported
+detect() {
+	if is_applied "$1"; then
+		if [ "$(rec_get "$1" stage)" = fstab ]; then say partial; else say applied; fi
+		return
+	fi
+	case $1 in
+	backlight-native)
+		if [ ! -f "$LIMINE_DEFAULT" ]; then
+			say unsupported
+		elif ! cmdline_line >/dev/null; then
+			say foreign
+		elif cmdline_line | grep -qE "(^|[\" ])$BACKLIGHT_ARG([\" ]|$)"; then
+			say "done"
+		elif cmdline_line | grep -q 'acpi_backlight='; then
+			say foreign
+		else
+			say pending
+		fi ;;
+	keyboard-iso)
+		case $(iso_configured) in
+		1 | y | Y) say "done" ;;
+		"") say pending ;;
+		*) say foreign ;;
+		esac ;;
+	hibernate)
+		if [ ! -f "$LIMINE_DEFAULT" ] || ! cmdline_line >/dev/null; then
+			say unsupported
+		elif [ "$(root_dev btrfs)" = "" ]; then
+			say unsupported
+		elif ! resume_hook; then
+			say unsupported
+		elif cmdline_line | grep -q 'resume='; then
+			say "done"
+		elif awk '$3 == "swap"' "$FSTAB" | grep -q . || [ -e "$ROOT/swap" ]; then
+			say foreign
+		else
+			say pending
+		fi ;;
+	esac
+}
+# root_dev FSTYPE: the device / is mounted from, if its type is FSTYPE.
+root_dev() { awk -v t="$1" '$2 == "/" && $3 == t {print $1; exit}' "$FSTAB" 2>/dev/null; }
+# resume_hook: the initramfs can resume from hibernation (mkinitcpio's systemd
+# hook, or the resume hook of busybox images). Any HOOKS line counts.
+resume_hook() {
+	local hooks
+	hooks=$(cat "$ROOT"/etc/mkinitcpio.conf "$ROOT"/etc/mkinitcpio.conf.d/*.conf 2>/dev/null | grep -E '^[[:space:]]*HOOKS\+?=')
+	grep -qwE 'systemd|resume' <<<"$hooks"
+}
+# Commands that act on the running system; a fake root only logs them.
+run() {
+	if [ -n "$ROOT" ]; then printf '%s\n' "$*" >>"$STATE/run.log"; else "$@"; fi
+}
+swap_offset() {
+	if [ -n "$ROOT" ]; then echo "${MACBOOK91_TEST_OFFSET:-533760}"; else btrfs inspect-internal map-swapfile -r /swap/swapfile; fi
+}
+# iso_configured: the iso_layout value applespi gets from modprobe.d (last wins).
+iso_configured() {
+	cat "$ROOT"/usr/lib/modprobe.d/*.conf "$ROOT"/run/modprobe.d/*.conf "$ROOT"/etc/modprobe.d/*.conf 2>/dev/null |
+		sed -nE 's/^[[:space:]]*options[[:space:]]+applespi[[:space:]].*iso_layout=([^[:space:]]+).*/\1/p' | tail -n1
+}
+# The one line that sets the default profile's command line.
+cmdline_line() {
+	local n
+	n=$(grep -cE '^KERNEL_CMDLINE\[default\]\+?="[^"]*"$' "$LIMINE_DEFAULT" 2>/dev/null)
+	[ "$n" = 1 ] || return 1
+	grep -E '^KERNEL_CMDLINE\[default\]\+?="[^"]*"$' "$LIMINE_DEFAULT"
+}
+
+# backup ID FILE: copy FILE into the step's backup directory; sets BACKUP.
+backup() {
+	# One directory per run, so a later apply never overwrites an earlier backup.
+	local dir=$STATE/backup/$1/$RUN_ID
+	BACKUP=$dir/$(basename "$2")
+	mkdir -p "$dir" && cp -av "$2" "$BACKUP" || return 1
+	# Rollback restores this copy; one that differs is no backup.
+	[ "$(sha "$BACKUP")" = "$(sha "$2")" ] || { err "backup of $2 failed"; return 1; }
+}
+write_record() { # write_record ID key=value...
+	local f
+	f=$(record "$1"); shift
+	mkdir -p "$(dirname "$f")"
+	{ printf 'time=%s\n' "$(date -Is)"; printf '%s\n' "$@"; } >"$f.tmp" && mv -f "$f.tmp" "$f"
+}
+
+apply_step() {
+	local b
+	case $1 in
+	keyboard-iso)
+		mkdir -p "$(dirname "$ISO_CONF")" &&
+			printf '# macbook91-hw-fixes: ISO keyboard layout for applespi (macbook91-hw-migrate rollback keyboard-iso removes it)\noptions applespi iso_layout=1\n' >"$ISO_CONF" || return 1
+		[ -w "$ISO_PARAM" ] && echo Y >"$ISO_PARAM"
+		# The initramfs needs it too: the LUKS passphrase is typed there.
+		if ! regen; then
+			rm -fv "$ISO_CONF"; [ -w "$ISO_PARAM" ] && echo N >"$ISO_PARAM"; regen
+			err "$REGEN failed; $ISO_CONF removed"; return 1
+		fi
+		write_record "$1" "sha_after=$(sha "$ISO_CONF")"
+		say "  active now, including the passphrase prompt from the next boot on" ;;
+	backlight-native)
+		backup "$1" "$LIMINE_DEFAULT" || return 1
+		b=$BACKUP
+		sed -E "s/^(KERNEL_CMDLINE\[default\]\+?=\"[^\"]*)\"$/\1 $BACKLIGHT_ARG\"/" "$b" >"$LIMINE_DEFAULT.tmp" &&
+			chmod --reference="$b" "$LIMINE_DEFAULT.tmp" || return 1
+		if [ "$(diff "$b" "$LIMINE_DEFAULT.tmp" | grep -c '^>')" != 1 ]; then
+			rm -f "$LIMINE_DEFAULT.tmp"; err "refusing: editing the command line did not change exactly one line"; return 1
+		fi
+		mv -fv "$LIMINE_DEFAULT.tmp" "$LIMINE_DEFAULT" || return 1
+		if ! regen; then
+			cp -av "$b" "$LIMINE_DEFAULT"; regen
+			err "$REGEN failed; /etc/default/limine restored"; return 1
+		fi
+		write_record "$1" "backup=$b" "sha_after=$(sha "$LIMINE_DEFAULT")"
+		say "  takes effect at the next boot" ;;
+	hibernate) apply_hibernate ;;
+	esac
+}
+
+apply_hibernate() {
+	local dev kib gib off top fb lb
+	dev=$(root_dev btrfs)
+	kib=$(awk '/^MemTotal:/ {print $2}' "$ROOT/proc/meminfo")
+	gib=$(((kib + 1048575) / 1048576))
+	if [ -z "$ROOT" ]; then
+		local free
+		free=$(df --output=avail -B1G / | tail -n1 | tr -d ' ')
+		[ "$free" -ge $((gib + 20)) ] || { err "only ${free} GiB free, need $((gib + 20))"; return 1; }
+	fi
+	backup hibernate "$FSTAB" || return 1; fb=$BACKUP
+	backup hibernate "$LIMINE_DEFAULT" || return 1; lb=$BACKUP
+	top=$(mktemp -d)
+	run mount -o subvolid=5 "$dev" "$top" || { rmdir "$top"; return 1; }
+	if [ -z "$ROOT" ] && [ -e "$top/@swap" ]; then
+		run umount "$top"; rmdir "$top"; err "subvolume @swap already exists; leaving it"; return 1
+	fi
+	run btrfs subvolume create "$top/@swap" || { run umount "$top"; rmdir "$top"; return 1; }
+	run umount "$top"; rmdir "$top"
+	mkdir -pv "$ROOT/swap"
+	printf '%s\n%s /swap btrfs subvol=/@swap,defaults,noatime 0 0\n/swap/swapfile none swap defaults,pri=-2 0 0\n' \
+		"$SWAP_MARK" "$dev" >>"$FSTAB"
+	write_record hibernate "dev=$dev" "fstab_backup=$fb" "limine_backup=$lb" "fstab_sha_after=$(sha "$FSTAB")" "stage=fstab"
+	run systemctl daemon-reload
+	run mount /swap || { err "mounting /swap failed"; return 1; }
+	run btrfs filesystem mkswapfile --size "${gib}g" /swap/swapfile || { err "mkswapfile failed"; return 1; }
+	run swapon /swap/swapfile || { err "swapon failed"; return 1; }
+	off=$(swap_offset)
+	[[ $off =~ ^[0-9]+$ ]] || { err "could not read the swap file offset"; return 1; }
+	sed -E "s|^(KERNEL_CMDLINE\[default\]\+?=\"[^\"]*)\"$|\1 resume=$dev resume_offset=$off\"|" "$lb" >"$LIMINE_DEFAULT.tmp" &&
+		chmod --reference="$lb" "$LIMINE_DEFAULT.tmp" || { rm -f "$LIMINE_DEFAULT.tmp"; return 1; }
+	mv -fv "$LIMINE_DEFAULT.tmp" "$LIMINE_DEFAULT" || return 1
+	if ! regen; then
+		# The record still says stage=fstab, and rollback leaves the command line alone then.
+		cp -av "$lb" "$LIMINE_DEFAULT"; regen
+		err "$REGEN failed; /etc/default/limine restored"; return 1
+	fi
+	write_record hibernate "dev=$dev" "offset=$off" "fstab_backup=$fb" "limine_backup=$lb" \
+		"fstab_sha_after=$(sha "$FSTAB")" "limine_sha_after=$(sha "$LIMINE_DEFAULT")" "stage=complete"
+	say "  swap file ${gib} GiB active; resume takes effect at the next boot"
+}
+
+rollback_step() {
+	local b
+	b=$(rec_get "$1" backup)
+	case $1 in
+	backlight-native)
+		if [ "$(sha "$LIMINE_DEFAULT")" = "$(rec_get "$1" sha_after)" ]; then
+			cp -av "$b" "$LIMINE_DEFAULT" || return 1
+		else
+			# Edited since: take out only our parameter, keep the rest.
+			sed -Ei "/^KERNEL_CMDLINE\[default\]/s/ $BACKLIGHT_ARG([\" ])/\1/" "$LIMINE_DEFAULT" || return 1
+		fi
+		regen || { err "$REGEN failed after restoring /etc/default/limine"; return 1; } ;;
+	keyboard-iso)
+		if [ -e "$ISO_CONF" ] && [ "$(sha "$ISO_CONF")" != "$(rec_get "$1" sha_after)" ]; then
+			err "$ISO_CONF changed since apply; leaving it"; return 1
+		fi
+		rm -fv "$ISO_CONF" || return 1
+		# Another modprobe.d file may still ask for the ISO layout.
+		[ -w "$ISO_PARAM" ] && [ -z "$(iso_configured)" ] && echo N >"$ISO_PARAM"
+		regen || { err "$REGEN failed after removing $ISO_CONF"; return 1; } ;;
+	hibernate) rollback_hibernate || return 1 ;;
+	esac
+	mkdir -p "$STATE/rolled-back" && mv -fv "$(record "$1")" "$STATE/rolled-back/$1.$(date +%Y%m%dT%H%M%S)"
+	say "rolled back: $1"
+}
+
+rollback_hibernate() {
+	local dev top
+	dev=$(rec_get hibernate dev)
+	# Nothing else is touched while the swap file is still in use.
+	if [ -z "$ROOT" ] && grep -q '^/swap/swapfile ' /proc/swaps; then
+		swapoff /swap/swapfile || { err "swapoff failed (not enough free memory?); nothing changed"; return 1; }
+	else
+		run swapoff /swap/swapfile
+	fi
+	run umount /swap
+	if [ "$(sha "$FSTAB")" = "$(rec_get hibernate fstab_sha_after)" ]; then
+		cp -av "$(rec_get hibernate fstab_backup)" "$FSTAB" || return 1
+	else
+		sed -i "\|^$SWAP_MARK\$|,+2d" "$FSTAB" || return 1
+	fi
+	run systemctl daemon-reload
+	top=$(mktemp -d)
+	if run mount -o subvolid=5 "$dev" "$top"; then
+		run btrfs subvolume delete "$top/@swap"
+		run umount "$top"
+	fi
+	rmdir "$top"
+	rmdir -v "$ROOT/swap" 2>/dev/null
+	if [ "$(rec_get hibernate stage)" = complete ]; then
+		if [ "$(sha "$LIMINE_DEFAULT")" = "$(rec_get hibernate limine_sha_after)" ]; then
+			cp -av "$(rec_get hibernate limine_backup)" "$LIMINE_DEFAULT" || return 1
+		else
+			sed -Ei "/^KERNEL_CMDLINE\[default\]/s/ resume=[^ \"]+ resume_offset=[0-9]+//" "$LIMINE_DEFAULT" || return 1
+		fi
+		regen || { err "$REGEN failed"; return 1; }
+	fi
+}
+
+regen() {
+	[ -z "$ROOT" ] || [ -n "${MACBOOK91_REGEN:-}" ] || return 0
+	$REGEN
+}
+
+lock() {
+	mkdir -p "$STATE" && exec 9>"$STATE/lock" && flock -n 9 || { err "another macbook91-hw-migrate run is active"; exit 1; }
+}
+
+check_dmi() {
+	local p v
+	p=$(cat "$ROOT/sys/class/dmi/id/product_name" 2>/dev/null)
+	v=$(cat "$ROOT/sys/class/dmi/id/sys_vendor" 2>/dev/null)
+	[ "$v" = "Apple Inc." ] && [ "$p" = "MacBook9,1" ] && return 0
+	err "this machine is '${v:-?} ${p:-?}', not an Apple MacBook9,1; nothing to do"
+	exit 3
+}
+need_root() { [ -n "$ROOT" ] || [ "$(id -u)" = 0 ] || { err "$1 needs root"; exit 2; }; }
+
+known() { [[ " ${ALL[*]} " == *" $1 "* ]]; }
+is_optional() { [[ " ${OPTIONAL[*]} " == *" $1 "* ]]; }
+
+cmd=${1:-status}; shift || true
+case $cmd in
+status | plan)
+	check_dmi
+	for s in "${ALL[@]}"; do
+		st=$(detect "$s")
+		if [ "$cmd" = status ]; then
+			is_optional "$s" && [ "$st" = pending ] && st=optional
+			printf '%-20s %-11s %s\n' "$s" "$st" "$(describe "$s")"
+		elif [ "$st" = pending ] && ! is_optional "$s"; then
+			printf 'would apply %s: %s\n' "$s" "$(describe "$s")"
+		fi
+	done ;;
+apply)
+	check_dmi; need_root apply; lock
+	for a in "$@"; do known "$a" || { err "unknown step: $a"; exit 2; }; done
+	[ $# -gt 0 ] || set -- "${STEPS[@]}"
+	rc=0
+	for s in "$@"; do
+		st=$(detect "$s")
+		case $st in
+		pending) say "apply $s"; apply_step "$s" || { err "step $s failed; 'macbook91-hw-migrate rollback $s' undoes what was done"; rc=1; } ;;
+		applied) say "skip $s: already applied" ;;
+		done) say "skip $s: nothing to do" ;;
+		partial) err "skip $s: an earlier apply stopped half-way; run 'macbook91-hw-migrate rollback $s' first"; rc=1 ;;
+		foreign) say "skip $s: content not recognised, left as it is" ;;
+		unsupported) say "skip $s: not supported on this system" ;;
+		esac
+	done
+	exit $rc ;;
+rollback)
+	check_dmi; need_root rollback; lock
+	for a in "$@"; do known "$a" || { err "unknown step: $a"; exit 2; }; done
+	[ $# -gt 0 ] || set -- "${ALL[@]}"
+	rc=0
+	for ((i = ${#ALL[@]} - 1; i >= 0; i--)); do
+		s=${ALL[i]}
+		[[ " $* " == *" $s "* ]] || continue
+		is_applied "$s" || continue
+		rollback_step "$s" || { err "rollback of $s failed"; rc=1; }
+	done
+	exit $rc ;;
+-h | --help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//' ;;
+*) err "usage: macbook91-hw-migrate status|plan|apply [ID...]|rollback [ID...]"; exit 2 ;;
+esac

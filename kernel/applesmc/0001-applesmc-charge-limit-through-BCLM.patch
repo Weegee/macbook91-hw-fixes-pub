@@ -1,0 +1,181 @@
+Subject: [PATCH] hwmon: applesmc: charge limit through the SMC key BCLM
+
+Own work for macbook91-hw-fixes (GPL-2.0-only, like applesmc itself).
+
+The SMC of Intel Macs keeps a charge limit in the key BCLM (battery charge
+level max, ui8, percent) and stops charging above it until an SMC reset.
+In-tree applesmc does not expose it, so desktops report "charge thresholds
+not supported". Offer it as charge_control_end_threshold (10..100) of the
+ACPI SBS battery BAT0 through a power_supply extension. sbs stays the in-tree
+driver; only applesmc is replaced. Nothing is registered where the SMC has no
+BCLM key or no BAT0 appears within a minute.
+
+Measured on an Apple MacBook9,1 (2026-10-14): on AC at 62 %, BCLM=55 cut the
+charge current from 1.22 A to 0 within 15 s (sbs status "Full"), BCLM=100
+resumed charging at 1.8 A.
+
+Prior art: applesmc-next (https://github.com/c---/applesmc-next) uses BCLM for
+the same attribute through a patched sbs battery hook; this patch avoids
+replacing sbs by using the power_supply extension API (Linux 6.15+).
+
+Applies with fuzz 0 to drivers/hwmon/applesmc.c of v6.18.55 and v7.2.9
+(see UPSTREAM.lock).
+
+--- a/drivers/hwmon/applesmc.c
++++ b/drivers/hwmon/applesmc.c
+@@ -26,6 +26,7 @@
+ #include <linux/timer.h>
+ #include <linux/dmi.h>
+ #include <linux/mutex.h>
++#include <linux/power_supply.h>
+ #include <linux/hwmon-sysfs.h>
+ #include <linux/io.h>
+ #include <linux/leds.h>
+@@ -1270,6 +1271,123 @@
+ 	destroy_workqueue(applesmc_led_wq);
+ }
+ 
++/*
++ * Charge limit (macbook91-hw-fixes). The SMC key BCLM (battery charge level
++ * max, ui8, percent) stops charging above the given level; the firmware keeps
++ * it until an SMC reset. It is offered as charge_control_end_threshold of the
++ * ACPI SBS battery BAT0 through a power_supply extension, so sbs stays the
++ * in-tree driver and desktops (PowerDevil) find the standard attribute.
++ * BAT0 may register after this module, so attaching is retried for a minute.
++ */
++#ifndef MB91_VERSION
++#define MB91_VERSION "dev"
++#endif
++#define APPLESMC_CHARGE_END_KEY	"BCLM"
++#define APPLESMC_BATTERY	"BAT0"
++#define APPLESMC_CHARGE_TRIES	30
++
++static struct power_supply *applesmc_battery;
++static int applesmc_charge_tries;
++static void applesmc_charge_attach(struct work_struct *work);
++static DECLARE_DELAYED_WORK(applesmc_charge_work, applesmc_charge_attach);
++
++static const enum power_supply_property applesmc_charge_props[] = {
++	POWER_SUPPLY_PROP_CHARGE_CONTROL_END_THRESHOLD,
++};
++
++static int applesmc_charge_get(struct power_supply *psy,
++			       const struct power_supply_ext *ext, void *data,
++			       enum power_supply_property psp,
++			       union power_supply_propval *val)
++{
++	u8 level;
++	int ret;
++
++	if (psp != POWER_SUPPLY_PROP_CHARGE_CONTROL_END_THRESHOLD)
++		return -EINVAL;
++	ret = applesmc_read_key(APPLESMC_CHARGE_END_KEY, &level, 1);
++	if (ret)
++		return ret;
++	val->intval = level;
++	return 0;
++}
++
++static int applesmc_charge_set(struct power_supply *psy,
++			       const struct power_supply_ext *ext, void *data,
++			       enum power_supply_property psp,
++			       const union power_supply_propval *val)
++{
++	u8 level;
++
++	if (psp != POWER_SUPPLY_PROP_CHARGE_CONTROL_END_THRESHOLD)
++		return -EINVAL;
++	/* The lower bound follows applesmc-next: no use in a nearly empty limit. */
++	if (val->intval < 10 || val->intval > 100)
++		return -EINVAL;
++	level = val->intval;
++	return applesmc_write_key(APPLESMC_CHARGE_END_KEY, &level, 1);
++}
++
++static int applesmc_charge_writeable(struct power_supply *psy,
++				     const struct power_supply_ext *ext,
++				     void *data, enum power_supply_property psp)
++{
++	return psp == POWER_SUPPLY_PROP_CHARGE_CONTROL_END_THRESHOLD;
++}
++
++static const struct power_supply_ext applesmc_charge_ext = {
++	.name			= "applesmc-charge",
++	.properties		= applesmc_charge_props,
++	.num_properties		= ARRAY_SIZE(applesmc_charge_props),
++	.get_property		= applesmc_charge_get,
++	.set_property		= applesmc_charge_set,
++	.property_is_writeable	= applesmc_charge_writeable,
++};
++
++static void applesmc_charge_attach(struct work_struct *work)
++{
++	struct power_supply *psy;
++	int ret;
++
++	psy = power_supply_get_by_name(APPLESMC_BATTERY);
++	if (!psy) {
++		if (++applesmc_charge_tries < APPLESMC_CHARGE_TRIES)
++			queue_delayed_work(system_dfl_wq, &applesmc_charge_work, 2 * HZ);
++		else
++			pr_info("%s not found, no charge limit\n", APPLESMC_BATTERY);
++		return;
++	}
++	ret = power_supply_register_extension(psy, &applesmc_charge_ext,
++					      &pdev->dev, NULL);
++	if (ret) {
++		pr_warn("charge limit on %s failed: %d\n", APPLESMC_BATTERY, ret);
++		power_supply_put(psy);
++		return;
++	}
++	applesmc_battery = psy;
++	pr_info("charge_control_end_threshold on %s via SMC key %s\n",
++		APPLESMC_BATTERY, APPLESMC_CHARGE_END_KEY);
++}
++
++static void applesmc_create_charge_limit(void)
++{
++	bool has;
++
++	if (applesmc_has_key(APPLESMC_CHARGE_END_KEY, &has) || !has)
++		return;
++	queue_delayed_work(system_dfl_wq, &applesmc_charge_work, 0);
++}
++
++static void applesmc_release_charge_limit(void)
++{
++	cancel_delayed_work_sync(&applesmc_charge_work);
++	if (!applesmc_battery)
++		return;
++	power_supply_unregister_extension(applesmc_battery, &applesmc_charge_ext);
++	power_supply_put(applesmc_battery);
++	applesmc_battery = NULL;
++}
++
+ static int applesmc_dmi_match(const struct dmi_system_id *id)
+ {
+ 	return 1;
+@@ -1374,6 +1492,7 @@
+ 		goto out_light_ledclass;
+ 	}
+ 
++	applesmc_create_charge_limit();
+ 	return 0;
+ 
+ out_light_ledclass:
+@@ -1403,6 +1522,7 @@
+ 
+ static void __exit applesmc_exit(void)
+ {
++	applesmc_release_charge_limit();
+ 	hwmon_device_unregister(hwmon_dev);
+ 	applesmc_release_key_backlight();
+ 	applesmc_release_light_sensor();
+@@ -1419,6 +1539,7 @@
+ module_init(applesmc_init);
+ module_exit(applesmc_exit);
+ 
++MODULE_INFO(macbook91, "charge-limit " MB91_VERSION);
+ MODULE_AUTHOR("Nicolas Boichat");
+ MODULE_DESCRIPTION("Apple SMC");
+ MODULE_LICENSE("GPL v2");
