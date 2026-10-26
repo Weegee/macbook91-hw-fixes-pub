@@ -6,6 +6,52 @@ measured, the package checksum) is `release/<version>/STATUS.txt`; the
 release tool keeps at most the two newest releases in the tree, older releases
 are not part of this repository.
 
+## 20261026.02
+
+**Text interfaces follow the house text guidelines (HIG): help, version, error
+and warning messages, colour and exit codes. The modules, the hook file, the
+udev rule and the migration steps are unchanged.**
+
+Interface changes (STA-4); what scripts parse stays as it was:
+
+- `macbook91-hw-verify`: new `-h`/`--help`, `-V`/`--version`, `--color=WHEN`,
+  `--no-color`; colour only on the PASS/WARN/FAIL keywords, by the order
+  `--color`, `MACBOOK91_HW_VERIFY_COLOR`, `NO_COLOR`, `FORCE_COLOR`,
+  `TERM=dumb`, terminal check. The PASS/WARN/FAIL/INFO lines and the RESULT
+  line are unchanged. On a machine other than a MacBook9,1 the message
+  `macbook91-hw-verify: error: this machine is ..., not an Apple MacBook9,1`
+  now goes to stderr (before: an INFO line on stdout); the exit code stays 3.
+- `macbook91-hw-migrate`: new `-h`/`--help`, `-V`/`--version`; an unknown
+  option or command, a missing step ID and extra arguments are usage errors
+  (exit 2, `Help: macbook91-hw-migrate --help`); step IDs are checked before
+  the root check; the root error names the command to run with sudo; SIGINT
+  and SIGTERM end the run with 130/143 and say how to check the state. The
+  `status` and `plan` lines are unchanged. Abweichung von TYP-3: `status` has
+  no header line, because `macbook91-hw-verify` and scripts read it. Abweichung
+  von ARG-4 und GEF-3: the dry run is the command `plan`.
+- Pacman hook (`kernel-series --hook`): the report goes to stderr in the form
+  `macbook91-hw-fixes: warning: ...` with indented continuation lines and
+  `macbook91-hw-fixes: note: ...`; the WARNING banner and its blank lines are
+  gone. `--applesmc` and `--backlight` print the same reasons and exit codes.
+  `kernel-series` gains `-h`/`--help` and `-V`/`--version`.
+- Install scriptlet: every `:: macbook91-hw-fixes: ...` message is now
+  `macbook91-hw-fixes: note: ...` or `... warning: ...` on stderr, with the
+  next steps as commands that can be copied.
+- `/usr/bin/macbook91-hw-verify` and `-migrate` carry the package version
+  (`--version` prints `macbook91-hw-verify 20261026.02`).
+- Repository tools: `kernel/applesmc/add-series.sh`, `tools/dev-backlight-check.sh`,
+  `tools/dev-suspend-series.sh`, `packaging/promote-release.sh` and
+  `packaging/mkdist.py` gain `-h`/`--help` and `-V`/`--version`; arguments are
+  checked before the root check; errors read `program: error: ...` with a
+  remedy and exit 2 for usage errors. `add-series.sh` writes its progress and
+  result to stderr and nothing to stdout. `promote-release.sh -n` runs the
+  checks and changes nothing; an interrupt removes a half-promoted release.
+  The cycle, report and RESULT lines of the two dev tools are unchanged.
+- `sleep/macbook91-lid-wake` logs with `logger -p user.info`.
+- Tests: help, version and usage-error checks for all tools, the colour
+  precedence of the verifier, the hook output form, scriptlet messages,
+  `promote-release.sh -n`.
+
 ## 20261026.01
 
 **Kernel series: the LTS kernel is the default, and a pacman hook reports
