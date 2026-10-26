@@ -17,6 +17,8 @@ This package owns these measures:
 - `macbook91-hw-migrate`: sets `acpi_backlight=native` (full, fine brightness; 0 = off)
   and, on request, sets up the ISO keyboard layout (`keyboard-iso`) and hibernate. Every
   step is backed up and can be undone. It only changes files that have the shape it expects.
+- pacman hook `71-macbook91-hw-fixes-series.hook`: after a kernel update, reports every
+  installed kernel the two modules do not cover (see Kernel series).
 - `macbook91-hw-verify`: checks packages, DKMS modules, charge limit, migration steps,
   brightness, wake sources, NVMe, keyboard, light and the hibernate configuration; `--deep`
   also runs the check tools of the driver packages that are installed.
@@ -47,11 +49,10 @@ the same source plus a patch of its own. It offers the SMC key `BCLM` as the bat
 Plasma UI itself is NOT VERIFIED). Measured: above the limit, charging stops
 at once. According to reports, the SMC keeps the value until an SMC reset, also across
 reboots (NOT VERIFIED on the MacBook9,1 used for testing); removing the package resets it to 100 %.
-Built only for kernels 6.18 and 7.2 (a source is included for these series).
-Other kernel series load the original `applesmc`: there the limit can be neither read nor
-changed, but one set earlier presumably stays in effect; `macbook91-hw-verify` then warns.
-Before moving to a new kernel series, set the limit to 100 %, or boot a kernel with a
-source to change it (e.g. `linux-cachyos-lts`, as long as it is 6.18).
+Built only for the kernel series with a source (see Kernel series). On any other kernel this
+package offers no charge limit, but one set earlier presumably stays in effect; the pacman hook
+and `macbook91-hw-verify` then warn. Before moving to a new kernel series, set the limit to
+100 %, or boot the LTS kernel (`linux-cachyos-lts`) to change it.
 
 ```fish
 cat /sys/class/power_supply/BAT0/charge_control_end_threshold          # read
@@ -61,11 +62,38 @@ echo 80 | sudo tee /sys/class/power_supply/BAT0/charge_control_end_threshold   #
 Findings and evidence: `docs/FINDINGS.md` (installed under `/usr/share/doc/macbook91-hw-fixes/`).
 On other models both tools do nothing (exit 3).
 
+## Kernel series
+
+Supported are the CachyOS LTS kernel (`linux-cachyos-lts`), the default, and the current
+series of `linux-cachyos` where the modules support it. The package depends on
+`linux-cachyos-lts-headers`, which pulls in `linux-cachyos-lts`; with `linux-cachyos-headers`
+installed as well, DKMS also builds for `linux-cachyos`.
+
+- `macbook91-applesmc` (the charge limit) is built only for the series pinned in
+  `kernel/applesmc/UPSTREAM.lock`.
+- `macbook91_backlight` is built for every kernel; `kernel/TESTED-SERIES` lists the series it
+  was checked on.
+
+After every kernel installation or upgrade the pacman hook `71-macbook91-hw-fixes-series.hook`
+checks the installed kernels. For a series without an applesmc source it prints a WARNING
+block: no charge limit of this package there, boot the LTS kernel. For a series the backlight
+was not tested on it prints a note. It builds nothing and never stops the transaction. The
+same answer by hand:
+
+```fish
+/usr/lib/macbook91-hw-fixes/kernel-series --applesmc (uname -r)
+/usr/lib/macbook91-hw-fixes/kernel-series --hook      # all installed kernels
+```
+
+CachyOS's Linux 7.3 builds no applesmc: it brings its own Apple SMC driver, `macsmc-acpi`.
+The two must not drive the SMC at the same time, so `macbook91-applesmc` is not built for 7.3
+(`docs/FINDINGS.md`). Whether the charge limit of the kernel's `macsmc-power` works on the
+MacBook9,1 is NOT VERIFIED.
+
 ## Kernel 6.18 (CachyOS LTS)
 
-The modules are built for the series 6.18 and 7.2. On the test machine they were checked
-with `linux-cachyos-lts` 6.18.55-2 (built with GCC 16.2.1) and `linux-cachyos` 7.2.11-1
-(built with clang 23.1.3).
+On the test machine the modules were checked with `linux-cachyos-lts` 6.18.55-2 (built with
+GCC 16.2.1) and `linux-cachyos` 7.2.11-1 (built with clang 23.1.3).
 
 VERIFIED on 6.18 (maintainer, 2026-10-20, `6.18.55-2-cachyos-lts` booted,
 `macbook91-hw-verify` with the earlier package `macbook91-hw-fixes` 20261020.01-1, a
@@ -92,7 +120,8 @@ happened in the checked boot (`suspend_stats` success 0). The hardware suspend s
 
 ## Installation (Arch Linux and derivatives)
 
-Install the headers of every kernel you use (the package builds two DKMS modules).
+Install the headers of every kernel you use (the package builds two DKMS modules); the
+package itself pulls in `linux-cachyos-lts-headers` (see Kernel series).
 The driver packages are optional; each has its own installation instructions.
 
 Then download all files of the latest release of this package into one empty directory,
@@ -181,8 +210,8 @@ Own work is GPL-3.0-or-later (`LICENSE`, `LICENSES/GPL-3.0-or-later.txt`). Excep
 
 Everything else is GPL-3.0-or-later, including `src/`, `sleep/`, `udev/`, `packaging/`,
 `tests/`, `tools/`, `docs/` and the other documentation, as well as
-`kernel/applesmc/UPSTREAM.lock`, `kernel/applesmc/add-series.sh` and the top-level
-`Makefile`: DKMS and the module build do not use them. Own files with comment syntax name
+`kernel/applesmc/UPSTREAM.lock`, `kernel/applesmc/add-series.sh`, `kernel/TESTED-SERIES` and
+the top-level `Makefile`: DKMS and the module build do not use them. Own files with comment syntax name
 their license in an `SPDX-License-Identifier` line; Markdown, JSON and text files carry
 none. `LICENSE` is the GPL-3.0-or-later text that GitHub shows; the same text is in
 `LICENSES/GPL-3.0-or-later.txt` next to the other two. The first three snapshots

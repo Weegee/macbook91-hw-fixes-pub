@@ -1,15 +1,21 @@
-Structure version: 20261021.01
+Structure version: 20261026.01
 
 Layout rules for this repository; the sibling packages macbook91-cs4208,
 macbook91-wireless and macbook91-facetimehd follow the same layout.
 
-src/                the two packaged tools, installed verbatim to /usr/bin:
-                    macbook91-hw-migrate, macbook91-hw-verify.
+src/                the packaged tools: macbook91-hw-migrate and
+                    macbook91-hw-verify, installed verbatim to /usr/bin;
+                    kernel-series (which kernel series the two modules cover),
+                    installed to /usr/lib/macbook91-hw-fixes/ with its
+                    version filled in; macbook91-hw-fixes-series.hook, the
+                    pacman hook that runs it, installed as
+                    /usr/share/libalpm/hooks/71-macbook91-hw-fixes-series.hook.
 udev/               packaged udev rules, installed to /usr/lib/udev/rules.d.
 sleep/              packaged systemd-sleep hook, installed to
                     /usr/lib/systemd/system-sleep.
 kernel/             DKMS module macbook91_backlight (perceptual backlight),
-                    installed to /usr/src/macbook91-backlight-<VERSION>.
+                    installed to /usr/src/macbook91-backlight-<VERSION>, with
+                    TESTED-SERIES (the kernel series it was checked on).
 kernel/applesmc/    DKMS replacement for in-tree applesmc (charge limit):
                     upstream/<series>/applesmc.c pristine kernel.org copies
                     pinned in UPSTREAM.lock, one own patch applied with fuzz 0

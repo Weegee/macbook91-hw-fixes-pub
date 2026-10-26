@@ -375,7 +375,7 @@
       "problem": "in-tree applesmc exposes no charge limit; PowerDevil: 'Charge thresholds are not supported by the kernel for this hardware'",
       "existing_fix_owner": "none (applesmc-next replaces applesmc and sbs; not packaged)",
       "decision": "DKMS replacement macbook91-applesmc: pristine applesmc.c per series (6.18.55, 7.2.9) + own patch, power_supply extension on BAT0 mapping charge_control_end_threshold (10..100) to BCLM",
-      "risk_rollback": "replaces an in-tree module; other kernel series keep in-tree applesmc (BUILD_EXCLUSIVE_KERNEL); pre_remove resets BCLM to 100; rollback: pacman -R or rmmod applesmc + delete updates/dkms/applesmc",
+      "risk_rollback": "replaces an in-tree module; kernels of a series without a source get no build (BUILD_EXCLUSIVE_KERNEL) and a WARNING from the pacman hook; CachyOS 7.3 has no applesmc but its own SMC driver macsmc-acpi, which must not run next to applesmc, so 7.3 stays without a source (docs/FINDINGS.md); pre_remove resets BCLM to 100; rollback: pacman -R or rmmod applesmc + delete updates/dkms/applesmc",
       "acceptance": "attribute present after boot; BCLM below charge level stops charging on AC; 100 resumes; value survives suspend and reboot; Plasma shows and sets it | PASS: attribute, stop, resume, DKMS load, verify; NOT_RUN: persistence over suspend/reboot, Plasma UI",
       "evidence": [
         {

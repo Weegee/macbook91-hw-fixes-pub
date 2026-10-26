@@ -201,6 +201,42 @@ The section on kernel 6.18 was measured later, on 2026-10-20.
   the boot), wake with the lid, the backlight across a suspend, persistence of a charge limit
   below 100 % (the limit was only read). The 7.2 suspend results do not carry over.
 
+## Kernel 7.3 (`linux-cachyos` 7.3.0-4): applesmc replaced by macsmc, review 2026-10-26
+- VERIFIED (source): the CachyOS kernel configuration turns `CONFIG_SENSORS_APPLESMC` from `m`
+  to "not set" with the 7.3.0-1 update (github.com/CachyOS/linux-cachyos, commit `cbd3c2573e`,
+  2026-10-21, file `linux-cachyos/config`; the only `=m` option that diff switches off; the pull
+  request gives no reason). The kernel tree of that release (github.com/CachyOS/linux, tag
+  `cachyos-7.3.0-4`) carries an x86 port of the Apple SMC framework of the Apple silicon port:
+  `platform/x86: add backend for macsmc in intel macs using ACPI` (`aeffbf4e59`),
+  `treewide: add backend for macsmc` (`606639f7c6`), `hwmon: add support for x86 macs in
+  macsmc-hwmon` (`eef1616dbc`) and follow-ups. The 7.3.0-4 configuration builds `MACSMC_ACPI`,
+  `MFD_MACSMC_CORE`, `MACSMC_POWER`, `SENSORS_MACSMC_HWMON`, `LEDS_MACSMC`, `MACSMC_LIGHT`,
+  `MACSMC_ACCEL`, `RTC_DRV_MACSMC` and `MACSMC_WDT` as modules; the `applesmc-t2` driver of the
+  6.18 LTS kernel is gone. The Kconfig entry of applesmc is unchanged (`depends on INPUT && X86`).
+  Arch Linux's own `linux` (7.2.11.arch1) keeps `CONFIG_SENSORS_APPLESMC=m`.
+- Inference, not stated by CachyOS: applesmc was turned off on purpose, because `macsmc-acpi`
+  drives the same SMC.
+- VERIFIED (hardware, journal of the 7.3.0-4 boot of 2026-10-24): `macsmc-acpi APP0001:00:
+  Successfully Initialized (701 keys ...)`. `macsmc-acpi` binds the SMC by its ACPI id `APP0001`.
+- VERIFIED (source): `macsmc-acpi` takes the SMC's I/O port from `_CRS` and uses it with
+  `inb`/`outb` without reserving it; applesmc reserves its fixed ports and loads by DMI
+  (`dmi*:pn*MacBook*:rvn*Apple*:`). A `macbook91-applesmc` built for 7.3 would load next to
+  `macsmc-acpi`, and both would drive the SMC ports at the same time without a common lock. That
+  rules out a 7.3 series of `macbook91-applesmc` on its own. The patch itself is no obstacle: it
+  applies to `v7.3` with fuzz 0, and the patched source builds against the 7.3.0-4 headers
+  (scratch build, not packaged).
+- VERIFIED (source), NOT VERIFIED on the MacBook9,1: `macsmc-power` registers a power supply of
+  its own, `macsmc-battery`, next to ACPI `BAT0`, with `charge_control_end_threshold` on the SMC
+  key `BCLM` (`CHLS` where present). Whether it registers on this machine, whether the limit takes
+  effect and what Plasma does with a second battery is not checked.
+- Consequence: `macbook91-applesmc` keeps the series 6.18 and 7.2. On a 7.3 kernel the pacman
+  hook prints a WARNING that names `macsmc-acpi`, and `macbook91-hw-verify` warns and reports a
+  `charge_control_end_threshold` of another power supply as INFO. `macbook91_backlight` builds and
+  loads on 7.3 (VERIFIED, same journal: "1000 perceptual levels on intel_backlight") but is not
+  tested there. Open, a decision for
+  the maintainer: rely on the kernel's macsmc on 7.3 after a check on the hardware, or build
+  applesmc for 7.3 and keep `macsmc-acpi` from loading.
+
 ## Journal warnings (`journalctl -b -p4`, review 2026-10-14)
 The messages of devices that need no action. The other messages were handed over to the
 sibling packages and to upstream.
