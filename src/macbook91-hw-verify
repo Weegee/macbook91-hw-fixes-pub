@@ -2,36 +2,100 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # macbook91-hw-verify - checks that the hardware fixes for an Apple MacBook9,1
 # are in place and in effect. Read-only; run as a user or as root (root adds
-# the NVMe health log).
+# the NVMe health log). Run it with --help for the options.
 #
-#   macbook91-hw-verify          this package and the state of the machine
-#   macbook91-hw-verify --deep   also run the verify tools of the audio,
-#                                camera and wireless packages, where installed
-#
-# Prints PASS/WARN/FAIL/INFO lines and a RESULT line.
+# Prints PASS/WARN/FAIL/INFO lines and a RESULT line; these keywords and the
+# RESULT line are an interface for scripts (they only change additively).
 # Exit: 0 no FAIL, 1 at least one FAIL, 2 usage, 3 not a MacBook9,1.
 set -u
 
+PROG=macbook91-hw-verify
+VERSION=@PKGVER@
+case $VERSION in @*) VERSION=dev ;; esac # not installed from a package: unreleased
 ROOT=${MACBOOK91_SYSROOT:-}
 DEEP=0
-case ${1:-} in
-"") ;;
---deep) DEEP=1 ;;
--h | --help) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-*) echo "usage: macbook91-hw-verify [--deep]" >&2; exit 2 ;;
-esac
+COLOR=${MACBOOK91_HW_VERIFY_COLOR:-auto}
+
+# Colour for channel $1, in the precedence of the text HIG (FAR-4): --color,
+# MACBOOK91_HW_VERIFY_COLOR, NO_COLOR, FORCE_COLOR, TERM=dumb, terminal check.
+use_color() {
+	case $COLOR in always) return 0 ;; never) return 1 ;; esac
+	[ -z "${NO_COLOR:-}" ] || return 1
+	{ [ -z "${FORCE_COLOR:-}" ] || [ "$FORCE_COLOR" = 0 ]; } || return 0
+	[ "${TERM:-dumb}" != dumb ] && [ -t "$1" ]
+}
+err() { printf '%s: error: %s\n' "$PROG" "$*" >&2; }
+usage_error() { err "$@"; printf 'Help: %s --help\n' "$PROG" >&2; exit 2; }
+usage() {
+	cat <<EOT
+Usage: $PROG [--deep] [--color=WHEN]
+
+Check that the hardware fixes for an Apple MacBook9,1 are in place and in
+effect. Read-only; as root it adds the NVMe health log.
+
+Examples:
+  $PROG
+      this package and the state of the machine
+  $PROG --deep
+      also run the verify tools of the audio, camera and wireless packages
+  $PROG | grep -v '^PASS'
+      only what needs a look
+
+Options:
+      --deep         also run the verify tools of the driver packages
+      --color=WHEN   colour the keywords: auto, always or never
+      --no-color     same as --color=never
+  -h, --help         show this help
+  -V, --version      show the version
+
+Environment:
+  NO_COLOR                     not empty: no colour
+  FORCE_COLOR                  not empty and not 0: colour without a terminal
+  MACBOOK91_HW_VERIFY_COLOR    auto, always or never (--color overrides it)
+
+Output: one line per check, starting with PASS, WARN, FAIL or INFO, then a
+line "RESULT pass=N warn=N fail=N". Scripts may rely on these keywords.
+
+Exit status:
+  0  no FAIL
+  1  at least one FAIL
+  2  usage error
+  3  this is not a MacBook9,1
+
+Docs and bug reports: https://github.com/Weegee/macbook91-hw-fixes-pub
+EOT
+}
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--deep) DEEP=1 ;;
+	--color=*)
+		COLOR=${1#*=}
+		case $COLOR in auto | always | never) ;; *) usage_error "--color expects auto, always or never, not '$COLOR'" ;; esac ;;
+	--no-color) COLOR=never ;;
+	-h | --help) usage; exit 0 ;;
+	-V | --version) printf '%s %s\n' "$PROG" "$VERSION"; exit 0 ;;
+	--) shift; [ $# -eq 0 ] || usage_error "unexpected argument '$1'"; break ;;
+	-?*) usage_error "unknown option '$1'" ;;
+	*) usage_error "unexpected argument '$1'" ;;
+	esac
+	shift
+done
+
+G='' Y='' R='' O=''
+if use_color 1; then G=$'\e[32m' Y=$'\e[33m' R=$'\e[31m' O=$'\e[0m'; fi
 
 pass=0 warn=0 fail=0
-PASS() { pass=$((pass + 1)); printf 'PASS %s\n' "$*"; }
-WARN() { warn=$((warn + 1)); printf 'WARN %s\n' "$*"; }
-FAIL() { fail=$((fail + 1)); printf 'FAIL %s\n' "$*"; }
+PASS() { pass=$((pass + 1)); printf '%sPASS%s %s\n' "$G" "$O" "$*"; }
+WARN() { warn=$((warn + 1)); printf '%sWARN%s %s\n' "$Y" "$O" "$*"; }
+FAIL() { fail=$((fail + 1)); printf '%sFAIL%s %s\n' "$R" "$O" "$*"; }
 INFO() { printf 'INFO %s\n' "$*"; }
 rd() { cat "$ROOT$1" 2>/dev/null; }
 
 product=$(rd /sys/class/dmi/id/product_name)
 vendor=$(rd /sys/class/dmi/id/sys_vendor)
 if [ "$vendor" != "Apple Inc." ] || [ "$product" != "MacBook9,1" ]; then
-	echo "INFO machine is '${vendor:-?} ${product:-?}', not an Apple MacBook9,1: nothing to check"
+	err "this machine is '${vendor:-?} ${product:-?}', not an Apple MacBook9,1; nothing to check"
 	exit 3
 fi
 PASS "dmi: Apple MacBook9,1"

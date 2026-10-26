@@ -20,10 +20,11 @@
 #                                       stdout either way
 #   kernel-series --backlight RELEASE   exit 0 if RELEASE is of a tested series,
 #                                       1 if not; a sentence on stdout either way
-#   kernel-series --hook                for every installed kernel: a WARNING
-#                                       block when applesmc has no source for
-#                                       its series, a note when the backlight
-#                                       is not tested on it (the pacman hook)
+#   kernel-series --hook                for every installed kernel: a warning
+#                                       when applesmc has no source for its
+#                                       series, a note when the backlight is
+#                                       not tested on it (the pacman hook; on
+#                                       stderr, so that it shows in pacman)
 #
 #   --src-root DIR       where the DKMS trees are (default /usr/src)
 #   --modules-root DIR   where the kernels are (default /usr/lib/modules)
@@ -31,30 +32,73 @@
 # Exit 2: bad arguments, or no installed DKMS tree of this version.
 set -u
 
+PROG=kernel-series
 PKGVER=@PKGVER@
 SRC_ROOT=/usr/src
 MODULES_ROOT=/usr/lib/modules
 MODE=''
 REL=''
 
-die() { printf 'kernel-series: %s\n' "$*" >&2; exit 2; }
+err() { printf '%s: error: %s\n' "$PROG" "$*" >&2; }
+die() { err "$@"; exit 2; }
+usage_error() { err "$@"; printf 'Help: %s --help\n' "$PROG" >&2; exit 2; }
+usage() {
+	cat <<EOT
+Usage: $PROG (--applesmc RELEASE | --backlight RELEASE | --hook)
+       [--src-root DIR] [--modules-root DIR]
+
+Say which Linux kernel series the two DKMS modules of macbook91-hw-fixes cover.
+Used by the pacman hook, the install scriptlet and macbook91-hw-verify; it is
+not meant to be run by hand.
+
+Examples:
+  $PROG --applesmc 6.18.55-2-cachyos-lts
+      is there a charge limit source for this kernel?
+  $PROG --backlight 7.3.0-4-cachyos
+      is the backlight module tested on this kernel?
+  $PROG --hook
+      check every installed kernel
+
+Options:
+      --applesmc RELEASE    exit 0 if RELEASE is of a series with a patched
+                            applesmc source, 1 if not; the reason on stdout
+      --backlight RELEASE   exit 0 if RELEASE is of a tested series, 1 if not;
+                            a sentence on stdout
+      --hook                warn on stderr about every installed kernel that
+                            the modules do not cover; always exits 0
+      --src-root DIR        where the DKMS trees are (default /usr/src)
+      --modules-root DIR    where the kernels are (default /usr/lib/modules)
+  -h, --help                show this help
+  -V, --version             show the version
+
+Exit status:
+  0  covered (or --hook finished)
+  1  not covered
+  2  usage error, or no installed DKMS tree of this version
+
+Docs and bug reports: https://github.com/Weegee/macbook91-hw-fixes-pub
+EOT
+}
 
 while [ $# -gt 0 ]; do
 	case "$1" in
+	-h | --help) usage; exit 0 ;;
+	-V | --version) printf '%s %s\n' "$PROG" "$PKGVER"; exit 0 ;;
 	--hook) MODE=hook; shift ;;
 	--applesmc | --backlight)
-		[ $# -ge 2 ] || die "$1 needs a kernel release"
+		[ $# -ge 2 ] || usage_error "$1 needs a kernel release"
 		MODE=${1#--}; REL=$2; shift 2 ;;
 	--src-root)
-		[ $# -ge 2 ] || die "--src-root needs a directory"
+		[ $# -ge 2 ] || usage_error "--src-root needs a directory"
 		SRC_ROOT=$2; shift 2 ;;
 	--modules-root)
-		[ $# -ge 2 ] || die "--modules-root needs a directory"
+		[ $# -ge 2 ] || usage_error "--modules-root needs a directory"
 		MODULES_ROOT=$2; shift 2 ;;
-	*) die "unknown argument: $1" ;;
+	-?*) usage_error "unknown option '$1'" ;;
+	*) usage_error "unexpected argument '$1'" ;;
 	esac
 done
-[ -n "$MODE" ] || die "no mode: use --applesmc RELEASE, --backlight RELEASE or --hook"
+[ -n "$MODE" ] || usage_error "no mode given: use --applesmc RELEASE, --backlight RELEASE or --hook"
 
 SMC_TREE=$SRC_ROOT/macbook91-applesmc-$PKGVER
 BL_LIST=$SRC_ROOT/macbook91-backlight-$PKGVER/TESTED-SERIES
@@ -143,11 +187,9 @@ hook)
 		[ -e "$d/vmlinuz" ] || continue
 		rel=$(basename "$d")
 		if ! in_list "$(series_of "$rel")" "${SMC_SERIES[@]}"; then
-			printf '\n==> WARNING: macbook91-hw-fixes ================================\n'
-			smc_unsupported "$rel" | sed 's/^/    /'
-			printf '==================================================================\n\n'
+			smc_unsupported "$rel" | sed -e '1s/^/macbook91-hw-fixes: warning: /' -e '2,$s/^/  /' >&2
 		fi
-		in_list "$(series_of "$rel")" "${BL_SERIES[@]}" || printf ':: macbook91-hw-fixes: %s\n' "$(bl_untested "$rel")"
+		in_list "$(series_of "$rel")" "${BL_SERIES[@]}" || printf 'macbook91-hw-fixes: note: %s\n' "$(bl_untested "$rel")" >&2
 	done
 	;;
 esac

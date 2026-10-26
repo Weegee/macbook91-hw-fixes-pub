@@ -31,6 +31,7 @@ check:
 install:
 	install -Dm755 src/macbook91-hw-verify "$(DESTDIR)$(PREFIX)/bin/macbook91-hw-verify"
 	install -Dm755 src/macbook91-hw-migrate "$(DESTDIR)$(PREFIX)/bin/macbook91-hw-migrate"
+	sed -i 's/^VERSION=@PKGVER@$$/VERSION=$(VERSION)/' "$(DESTDIR)$(PREFIX)/bin/macbook91-hw-verify" "$(DESTDIR)$(PREFIX)/bin/macbook91-hw-migrate"
 	install -Dm755 src/kernel-series "$(DESTDIR)$(PREFIX)/lib/$(NAME)/kernel-series"
 	sed -i 's/@PKGVER@/$(VERSION)/' "$(DESTDIR)$(PREFIX)/lib/$(NAME)/kernel-series"
 	install -Dm644 src/macbook91-hw-fixes-series.hook "$(DESTDIR)$(PREFIX)/share/libalpm/hooks/71-macbook91-hw-fixes-series.hook"
@@ -66,8 +67,8 @@ arch-pkg: dist
 	@want=$$(sed -n "s/^sha256sums=('\([0-9a-f]*\)').*/\1/p" packaging/arch/PKGBUILD); \
 	have=$$(cut -d' ' -f1 dist/$(NAME)-$(VERSION).tar.sha256); \
 	if [ "$$want" != "$$have" ]; then \
-		echo "arch-pkg: PKGBUILD sha256sums is $$want, tarball is $$have" >&2; \
-		echo "arch-pkg: set sha256sums to $$have, make srcinfo, commit (--amend), rerun" >&2; \
+		echo "make arch-pkg: error: the PKGBUILD pins sha256sums $$want, but the tarball is $$have" >&2; \
+		echo "  Set sha256sums to $$have in packaging/arch/PKGBUILD, then run: make srcinfo && make arch-pkg" >&2; \
 		exit 1; \
 	fi
 	$(MAKE) --no-print-directory _arch-build

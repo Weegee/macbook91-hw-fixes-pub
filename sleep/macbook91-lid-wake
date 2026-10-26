@@ -19,7 +19,7 @@ LID=$ROOT/proc/acpi/button/lid/LID0/state
 
 [ "$(cat "$ROOT/sys/class/dmi/id/product_name" 2>/dev/null)" = "MacBook9,1" ] || exit 0
 
-log() { if [ -n "$ROOT" ]; then echo "$*" >>"$ROOT/lid-wake.log"; else logger -t macbook91-lid-wake "$*"; fi; }
+log() { if [ -n "$ROOT" ]; then echo "$*" >>"$ROOT/lid-wake.log"; else logger -t macbook91-lid-wake -p user.info "$*"; fi; }
 enabled() { grep -qE '^LID0[[:space:]].*\*enabled' "$WAKEUP"; }
 set_lid0() { # set_lid0 on|off
 	if [ "$1" = on ]; then enabled || echo LID0 >"$WAKEUP"; else ! enabled || echo LID0 >"$WAKEUP"; fi

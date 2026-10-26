@@ -75,10 +75,10 @@ installed as well, DKMS also builds for `linux-cachyos`.
   was checked on.
 
 After every kernel installation or upgrade the pacman hook `71-macbook91-hw-fixes-series.hook`
-checks the installed kernels. For a series without an applesmc source it prints a WARNING
-block: no charge limit of this package there, boot the LTS kernel. For a series the backlight
-was not tested on it prints a note. It builds nothing and never stops the transaction. The
-same answer by hand:
+checks the installed kernels. For a series without an applesmc source it prints a warning
+(`macbook91-hw-fixes: warning: ...`): no charge limit of this package there, boot the LTS
+kernel. For a series the backlight was not tested on it prints a note. Both go to stderr, so
+pacman shows them. It builds nothing and never stops the transaction. The same answer by hand:
 
 ```fish
 /usr/lib/macbook91-hw-fixes/kernel-series --applesmc (uname -r)
@@ -170,6 +170,13 @@ sudo macbook91-hw-migrate rollback       # undo all steps, then reboot
 sudo macbook91-hw-migrate rollback backlight-native   # just one step
 sudo pacman -R macbook91-hw-fixes        # applied steps stay; roll back first
 ```
+
+Every tool answers `-h`/`--help` (full help on stdout, exit 0) and `-V`/`--version`. Messages
+read `program: error: what happened, why, what to do` on stderr; a usage error ends with 2
+and the line `Help: program --help`. `macbook91-hw-verify` colours only the PASS/WARN/FAIL
+keywords on a terminal (`--color=auto|always|never`, `--no-color`; `NO_COLOR`, `FORCE_COLOR`
+and `MACBOOK91_HW_VERIFY_COLOR` are honoured) and keeps the line format for scripts: one
+PASS, WARN, FAIL or INFO line per check, then `RESULT pass=N warn=N fail=N`.
 
 ## Hibernate (optional)
 

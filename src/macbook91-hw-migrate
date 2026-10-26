@@ -10,6 +10,10 @@
 #                                          named ones (root)
 #   macbook91-hw-migrate rollback [ID...]  undo applied steps, newest first (root)
 #
+# Abweichung von ARG-4 und GEF-3: the dry run is the command "plan", not
+# -n/--dry-run; the command is older than the guideline and part of the
+# interface (STA-1), so it stays.
+#
 # Default step: backlight-native.
 # Optional, only when named: keyboard-iso (applespi iso_layout=1 for ISO
 # keyboards), hibernate (swap file on its own Btrfs subvolume @swap behind
@@ -35,9 +39,68 @@ BACKLIGHT_ARG=acpi_backlight=native
 FSTAB=$ROOT/etc/fstab
 SWAP_MARK="# macbook91-hw-fixes: hibernation (macbook91-hw-migrate rollback hibernate removes it)"
 
+PROG=macbook91-hw-migrate
+VERSION=@PKGVER@
+case $VERSION in @*) VERSION=dev ;; esac # not installed from a package: unreleased
+
 RUN_ID=$(date +%Y%m%dT%H%M%S)-$$
+# say prints a result or a step report on stdout; err is a message on stderr.
 say() { printf '%s\n' "$*"; }
-err() { printf 'macbook91-hw-migrate: %s\n' "$*" >&2; }
+err() { printf '%s: error: %s\n' "$PROG" "$*" >&2; }
+usage_error() { err "$@"; printf 'Help: %s --help\n' "$PROG" >&2; exit 2; }
+usage() {
+	cat <<EOT
+Usage: $PROG [COMMAND] [ID...]
+
+Set the kernel parameter the package relies on and, when named, two optional
+settings on an Apple MacBook9,1. Every change is backed up, recorded and
+reversible. A file is only changed when it has the shape this tool expects;
+anything else is reported as "foreign" and left alone.
+
+Examples:
+  $PROG
+      what each step finds now
+  $PROG plan
+      what apply would change
+  sudo $PROG apply
+      apply the pending default step
+  sudo $PROG apply keyboard-iso
+      an optional step, only when named
+  sudo $PROG rollback hibernate
+      undo one step
+
+Commands:
+  status             show what each step finds now (default)
+  plan               show what apply would change; changes nothing
+  apply [ID...]      apply the pending default steps, or the named ones (root)
+  rollback [ID...]   undo applied steps, newest first (root)
+
+Steps:
+  backlight-native   kernel parameter acpi_backlight=native (default)
+  keyboard-iso       applespi iso_layout=1 for ISO keyboards (optional)
+  hibernate          swap file on the Btrfs subvolume @swap behind zram, with
+                     resume= and resume_offset= on the command line (optional)
+
+Output of status: one line per step, "ID  STATE  description" without a
+header, for scripts. STATE is applied, partial, pending, optional, done,
+foreign or unsupported. Output of plan: "would apply ID: description".
+
+Options:
+  -h, --help       show this help
+  -V, --version    show the version
+
+Files:
+  /var/lib/macbook91-hw-fixes   records and backups of the applied steps
+
+Exit status:
+  0  done
+  1  a step failed
+  2  usage error, or apply or rollback without root
+  3  this is not a MacBook9,1
+
+Docs and bug reports: https://github.com/Weegee/macbook91-hw-fixes-pub
+EOT
+}
 sha() { sha256sum "$1" 2>/dev/null | cut -d' ' -f1; }
 record() { printf '%s\n' "$STATE/applied/$1"; }
 is_applied() { [ -f "$(record "$1")" ]; }
@@ -159,7 +222,7 @@ apply_step() {
 		sed -E "s/^(KERNEL_CMDLINE\[default\]\+?=\"[^\"]*)\"$/\1 $BACKLIGHT_ARG\"/" "$b" >"$LIMINE_DEFAULT.tmp" &&
 			chmod --reference="$b" "$LIMINE_DEFAULT.tmp" || return 1
 		if [ "$(diff "$b" "$LIMINE_DEFAULT.tmp" | grep -c '^>')" != 1 ]; then
-			rm -f "$LIMINE_DEFAULT.tmp"; err "refusing: editing the command line did not change exactly one line"; return 1
+			rm -f "$LIMINE_DEFAULT.tmp"; err "editing the command line did not change exactly one line; $LIMINE_DEFAULT is unchanged"; return 1
 		fi
 		mv -fv "$LIMINE_DEFAULT.tmp" "$LIMINE_DEFAULT" || return 1
 		if ! regen; then
@@ -290,15 +353,45 @@ check_dmi() {
 	err "this machine is '${v:-?} ${p:-?}', not an Apple MacBook9,1; nothing to do"
 	exit 3
 }
-need_root() { [ -n "$ROOT" ] || [ "$(id -u)" = 0 ] || { err "$1 needs root"; exit 2; }; }
+need_root() { # COMMAND [ID...]
+	[ -n "$ROOT" ] || [ "$(id -u)" = 0 ] || { err "$1 needs root"; printf '  Run: sudo %s %s\n' "$PROG" "$*" >&2; exit 2; }
+}
 
 known() { [[ " ${ALL[*]} " == *" $1 "* ]]; }
 is_optional() { [[ " ${OPTIONAL[*]} " == *" $1 "* ]]; }
+unknown_step() {
+	local list
+	printf -v list '%s, ' "${ALL[@]}"
+	usage_error "unknown step '$1' (valid: ${list%, })"
+}
 
+# A signal ends the run like any process killed by it (130, 143); the apply and
+# rollback steps leave a record that status shows, so nothing else to clean up.
+on_signal() { # SIGNAL
+	trap - "$1"
+	printf '\n%s: interrupted; check the state: %s status\n' "$PROG" "$PROG" >&2
+	kill -s "$1" "$$"
+}
+trap 'on_signal INT' INT
+trap 'on_signal TERM' TERM
+
+# -h and -V work in any position; any other option is a usage error.
+for a in "$@"; do
+	case $a in
+	-h | --help) usage; exit 0 ;;
+	-V | --version) printf '%s %s\n' "$PROG" "$VERSION"; exit 0 ;;
+	--) break ;;
+	-?*) usage_error "unknown option '$a'" ;;
+	esac
+done
+[ "${1:-}" != -- ] || shift
 cmd=${1:-status}; shift || true
 case $cmd in
 status | plan)
+	[ $# -eq 0 ] || usage_error "$cmd takes no step IDs (got '$1')"
 	check_dmi
+	# Abweichung von TYP-3: no header line. macbook91-hw-verify and scripts read
+	# these lines (STA-1/MAS-2); the format stays, the help text documents it.
 	for s in "${ALL[@]}"; do
 		st=$(detect "$s")
 		if [ "$cmd" = status ]; then
@@ -309,25 +402,27 @@ status | plan)
 		fi
 	done ;;
 apply)
-	check_dmi; need_root apply; lock
-	for a in "$@"; do known "$a" || { err "unknown step: $a"; exit 2; }; done
+	check_dmi
+	for a in "$@"; do known "$a" || unknown_step "$a"; done
+	need_root apply "$@"; lock
 	[ $# -gt 0 ] || set -- "${STEPS[@]}"
 	rc=0
 	for s in "$@"; do
 		st=$(detect "$s")
 		case $st in
-		pending) say "apply $s"; apply_step "$s" || { err "step $s failed; 'macbook91-hw-migrate rollback $s' undoes what was done"; rc=1; } ;;
+		pending) say "apply $s"; apply_step "$s" || { err "step $s failed; undo what was done: sudo $PROG rollback $s"; rc=1; } ;;
 		applied) say "skip $s: already applied" ;;
 		done) say "skip $s: nothing to do" ;;
-		partial) err "skip $s: an earlier apply stopped half-way; run 'macbook91-hw-migrate rollback $s' first"; rc=1 ;;
+		partial) err "step $s: an earlier apply stopped half-way; run first: sudo $PROG rollback $s"; rc=1 ;;
 		foreign) say "skip $s: content not recognised, left as it is" ;;
 		unsupported) say "skip $s: not supported on this system" ;;
 		esac
 	done
 	exit $rc ;;
 rollback)
-	check_dmi; need_root rollback; lock
-	for a in "$@"; do known "$a" || { err "unknown step: $a"; exit 2; }; done
+	check_dmi
+	for a in "$@"; do known "$a" || unknown_step "$a"; done
+	need_root rollback "$@"; lock
 	[ $# -gt 0 ] || set -- "${ALL[@]}"
 	rc=0
 	for ((i = ${#ALL[@]} - 1; i >= 0; i--)); do
@@ -337,6 +432,5 @@ rollback)
 		rollback_step "$s" || { err "rollback of $s failed"; rc=1; }
 	done
 	exit $rc ;;
--h | --help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//' ;;
-*) err "usage: macbook91-hw-migrate status|plan|apply [ID...]|rollback [ID...]"; exit 2 ;;
+*) usage_error "unknown command '$cmd' (valid: status, plan, apply, rollback)" ;;
 esac

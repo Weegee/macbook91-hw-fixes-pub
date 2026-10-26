@@ -20,6 +20,7 @@ Same scheme as packaging/mkdist.py in macbook91-facetimehd and -cs4208.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import io
 import os
@@ -62,8 +63,44 @@ def git(*args: str) -> str:
     return subprocess.run(["git", "-C", ROOT, *args], check=True, capture_output=True, text=True).stdout
 
 
+PROG = "mkdist.py"
+
+HELP = f"""Usage: {PROG} [--allow-dirty] [--out DIR]
+
+Build the source tarball of the package, byte-reproducibly, from the files
+tracked in git. Development and release tool, not packaged.
+
+Examples:
+  {PROG}                      dist/NAME-VERSION.tar and .sha256
+  {PROG} --out /tmp/dist      the same, in another directory
+  {PROG} --allow-dirty        include uncommitted changes of tracked files
+
+Options:
+      --allow-dirty   do not refuse uncommitted changes (not for a release)
+      --out DIR       write the tarball to DIR instead of dist/
+  -h, --help          show this help
+  -V, --version       show the version of this repository
+
+Output: one line "SHA256  PATH" on stdout; messages go to stderr.
+
+Exit status:
+  0  the tarball is written
+  1  refused (uncommitted changes, an untracked file) or git failed
+  2  usage error
+"""
+
+
+class Parser(argparse.ArgumentParser):
+    """argparse with the error form of the text HIG: what, then the way to the help."""
+
+    def error(self, message: str) -> None:  # type: ignore[override]
+        print(f"{self.prog}: error: {message}", file=sys.stderr)
+        print(f"Help: {self.prog} --help", file=sys.stderr)
+        sys.exit(2)
+
+
 def fail(msg: str) -> int:
-    print(f"mkdist: {msg}", file=sys.stderr)
+    print(f"{PROG}: error: {msg}", file=sys.stderr)
     return 1
 
 
@@ -73,12 +110,22 @@ def sha256(path: str) -> str:
 
 
 def main(argv: list[str]) -> int:
-    allow_dirty = "--allow-dirty" in argv
-    out_dir = os.path.join(ROOT, "dist")
-    if "--out" in argv:
-        out_dir = os.path.abspath(argv[argv.index("--out") + 1])
+    parser = Parser(prog=PROG, add_help=False, allow_abbrev=False)
+    parser.add_argument("--allow-dirty", action="store_true")
+    parser.add_argument("--out", metavar="DIR")
+    parser.add_argument("-h", "--help", action="store_true")
+    parser.add_argument("-V", "--version", action="store_true")
+    args = parser.parse_args(argv)
     with open(os.path.join(ROOT, "VERSION"), encoding="ascii") as fh:
         version = fh.read().strip()
+    if args.help:
+        print(HELP, end="")
+        return 0
+    if args.version:
+        print(f"{PROG} {version}")
+        return 0
+    allow_dirty = args.allow_dirty
+    out_dir = os.path.abspath(args.out) if args.out else os.path.join(ROOT, "dist")
 
     if not allow_dirty and git("status", "--porcelain", "--untracked-files=no").strip():
         return fail("working tree has uncommitted changes; commit first (or --allow-dirty)")
@@ -125,4 +172,10 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except subprocess.CalledProcessError as exc:
+        sys.exit(fail(f"git failed ({' '.join(exc.cmd[2:])}): {exc.stderr.strip() or 'exit ' + str(exc.returncode)}"))
+    except KeyboardInterrupt:
+        print(f"\n{PROG}: interrupted", file=sys.stderr)
+        sys.exit(130)

@@ -4,6 +4,18 @@
 # suspend. Changes to files the package does not own (/etc/default/limine,
 # /etc/modprobe.d) are made by `macbook91-hw-migrate apply`, which backs them
 # up and can undo them.
+#
+# Messages follow the text HIG: on stderr (pacman shows both streams), as
+# "macbook91-hw-fixes: note: ..." or "macbook91-hw-fixes: warning: ...", further
+# lines indented by two spaces, commands copyable. The package name stands in
+# for the program name, because a scriptlet is not a program.
+_msg() { # KIND LINE...
+    _k=$1
+    shift
+    printf 'macbook91-hw-fixes: %s: %s\n' "$_k" "$1" >&2
+    shift
+    for _l in "$@"; do printf '  %s\n' "$_l" >&2; done
+}
 
 _nvme_d3cold() {
     [ "$(cat /sys/class/dmi/id/product_name 2>/dev/null)" = "MacBook9,1" ] || return 0
@@ -17,30 +29,32 @@ _nvme_d3cold() {
 # DKMS builds the applesmc replacement (charge limit) during the transaction
 # for every kernel series it has a source for; the running in-tree applesmc
 # stays until it is reloaded or the next boot. Kernels of another series get a
-# WARNING from the pacman hook 71-macbook91-hw-fixes-series.hook; both ask
+# warning from the pacman hook 71-macbook91-hw-fixes-series.hook; both ask
 # kernel-series.
 _applesmc_hint() {
     [ "$(cat /sys/class/dmi/id/product_name 2>/dev/null)" = "MacBook9,1" ] || return 0
     [ -e /sys/class/power_supply/BAT0/charge_control_end_threshold ] && return 0
     /usr/lib/macbook91-hw-fixes/kernel-series --applesmc "$(uname -r)" >/dev/null 2>&1 || return 0
-    echo ":: macbook91-hw-fixes: the charge limit (applesmc with SMC key BCLM) takes effect after a reboot"
-    echo "   or now with 'sudo modprobe -r applesmc && sudo modprobe applesmc'."
+    _msg note "the charge limit (applesmc with SMC key BCLM) takes effect after a reboot, or now with" \
+        "sudo modprobe -r applesmc && sudo modprobe applesmc"
 }
 
 post_install() {
     _nvme_d3cold
     _applesmc_hint
-    echo ":: macbook91-hw-fixes: review with 'macbook91-hw-migrate plan', apply with"
-    echo "   'sudo macbook91-hw-migrate apply' (backups, 'rollback' undoes), then reboot."
-    echo "   ISO keyboard (German and most European layouts): 'sudo macbook91-hw-migrate apply keyboard-iso'."
-    echo "   Check the machine with 'macbook91-hw-verify' (--deep adds the audio, camera and wireless checks, where installed)."
+    _msg note "next steps" \
+        "Review what would change:  macbook91-hw-migrate plan" \
+        "Apply it, then reboot:     sudo macbook91-hw-migrate apply" \
+        "Undo it later:             sudo macbook91-hw-migrate rollback" \
+        "ISO keyboard (German and most European layouts), also:  sudo macbook91-hw-migrate apply keyboard-iso" \
+        "Check the machine (--deep adds the audio, camera and wireless checks, where installed):  macbook91-hw-verify"
 }
 
 post_upgrade() {
     _nvme_d3cold
     _applesmc_hint
     if command -v macbook91-hw-migrate >/dev/null && macbook91-hw-migrate plan 2>/dev/null | grep -q '^would apply'; then
-        echo ":: macbook91-hw-fixes: new migration steps are pending: 'macbook91-hw-migrate plan'"
+        _msg note "new migration steps are pending" "Review them:  macbook91-hw-migrate plan"
     fi
 }
 
@@ -50,20 +64,21 @@ pre_remove() {
     _t=/sys/class/power_supply/BAT0/charge_control_end_threshold
     if [ -w "$_t" ] && [ "$(cat "$_t" 2>/dev/null)" != 100 ]; then
         if echo 100 >"$_t" 2>/dev/null; then
-            echo ":: macbook91-hw-fixes: charge limit reset to 100 % (the SMC would keep it after removal)"
+            _msg note "charge limit reset to 100 % (the SMC would keep it after removal)"
         else
-            echo ":: macbook91-hw-fixes: could not reset the charge limit to 100 %; it stays at $(cat "$_t" 2>/dev/null) %"
+            _msg warning "could not reset the charge limit to 100 %; it stays at $(cat "$_t" 2>/dev/null) %"
         fi
     elif [ ! -e "$_t" ] && [ "$(cat /sys/class/dmi/id/product_name 2>/dev/null)" = "MacBook9,1" ]; then
-        echo ":: macbook91-hw-fixes: the package's charge limit is not loaded on this kernel, so it was not reset."
-        echo "   If one below 100 % was set, the SMC may keep it: reinstall the package, boot the LTS kernel"
-        echo "   (linux-cachyos-lts), run 'echo 100 | sudo tee $_t', then remove the package."
+        _msg warning "the package's charge limit is not loaded on this kernel, so it was not reset" \
+            "If one below 100 % was set, the SMC may keep it. Reinstall the package, boot the LTS kernel" \
+            "(linux-cachyos-lts), run the command below, then remove the package:" \
+            "echo 100 | sudo tee $_t"
     fi
-    echo ":: macbook91-hw-fixes: without the package the NVMe udev rule is gone; from the next boot"
-    echo "   the NVMe root port may enter D3 during suspend again."
+    _msg note "without the package the NVMe udev rule is gone; from the next boot" \
+        "the NVMe root port may enter D3 during suspend again"
     if [ -d /var/lib/macbook91-hw-fixes/applied ] && [ -n "$(ls -A /var/lib/macbook91-hw-fixes/applied 2>/dev/null)" ]; then
-        echo ":: macbook91-hw-fixes: applied migration steps stay in place after removal."
-        echo "   To undo them first: 'sudo macbook91-hw-migrate rollback'. Backups remain in"
-        echo "   /var/lib/macbook91-hw-fixes/ either way."
+        _msg note "applied migration steps stay in place after removal" \
+            "To undo them first:  sudo macbook91-hw-migrate rollback" \
+            "Backups remain in /var/lib/macbook91-hw-fixes/ either way"
     fi
 }

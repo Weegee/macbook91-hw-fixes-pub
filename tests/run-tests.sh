@@ -17,6 +17,8 @@ ok() { pass=$((pass + 1)); printf 'PASS %s\n' "$1"; }
 no() { fail=$((fail + 1)); printf 'FAIL %s\n' "$1"; }
 check() { if eval "$2"; then ok "$1"; else no "$1"; fi; }
 sha() { sha256sum "$1" | cut -d' ' -f1; }
+SQ="'" # a single quote inside the single-quoted checks
+ESC=$(printf '\033')
 
 # --- repository hygiene
 cd "$REPO" || exit 1
@@ -64,11 +66,16 @@ check "kernel-series: a series with a source is supported" 'ksx --applesmc 6.18.
 check "kernel-series: another series is not, and its own SMC driver is named" 'o=$(ksx --applesmc 7.3.0-4-cachyos); [ $? = 1 ] && grep -q "(Linux 7.3) is not a series macbook91-applesmc has a source for (6.18 7.2)" <<<"$o" && grep -q "own Apple SMC driver, macsmc-acpi" <<<"$o"'
 check "kernel-series: a kernel without any SMC driver says so" 'ksx --applesmc 7.4.0-1-cachyos | grep -q "has no Apple SMC driver"'
 check "kernel-series: the backlight is tested on the listed series only" 'ksx --backlight 7.2.11-1-cachyos >/dev/null && ! ksx --backlight 7.3.0-4-cachyos >/dev/null'
-out=$(ksx --hook); rc=$?
-check "kernel-series --hook: a WARNING block for each kernel without an applesmc source, none for a covered one" '[ $rc = 0 ] && [ "$(grep -c "^==> WARNING: macbook91-hw-fixes" <<<"$out")" = 2 ] && grep -q "kernel 7.3.0-4-cachyos (Linux 7.3)" <<<"$out" && grep -q "kernel 7.4.0-1-cachyos (Linux 7.4)" <<<"$out" && ! grep -q "6.18.55" <<<"$out"'
-check "kernel-series --hook: one note line per kernel with an untested backlight series" '[ "$(grep -c "^:: macbook91-hw-fixes: macbook91_backlight is built for kernel" <<<"$out")" = 2 ]'
+out=$(ksx --hook 2>&1); rc=$?
+out_stdout=$(ksx --hook 2>/dev/null)
+check "kernel-series --hook: a warning for each kernel without an applesmc source, none for a covered one" '[ $rc = 0 ] && [ "$(grep -c "^macbook91-hw-fixes: warning: kernel " <<<"$out")" = 2 ] && ! grep -q "====" <<<"$out" && grep -q "kernel 7.3.0-4-cachyos (Linux 7.3)" <<<"$out" && grep -q "kernel 7.4.0-1-cachyos (Linux 7.4)" <<<"$out" && ! grep -q "6.18.55" <<<"$out"'
+check "kernel-series --hook: one note line per kernel with an untested backlight series" '[ "$(grep -c "^macbook91-hw-fixes: note: macbook91_backlight is built for kernel" <<<"$out")" = 2 ]'
+check "kernel-series --hook: messages go to stderr, stdout stays empty" '[ -z "$out_stdout" ]'
+check "kernel-series --hook: continuation lines are indented by two spaces" 'grep -q "^  so the charge limit of this package is not built for it\.$" <<<"$out"'
 check "kernel-series --hook: a directory without vmlinuz is no kernel" '! grep -q headers-only <<<"$out"'
-check "kernel-series --hook: nothing to report, no output" 'rm -r "$KR/modules/7.3.0-4-cachyos" "$KR/modules/7.4.0-1-cachyos"; [ -z "$(ksx --hook)" ]'
+check "kernel-series --hook: nothing to report, no output" 'rm -r "$KR/modules/7.3.0-4-cachyos" "$KR/modules/7.4.0-1-cachyos"; [ -z "$(ksx --hook 2>&1)" ]'
+check "kernel-series: --help is on stdout with exit 0, --version names the program" 'h=$(ksx --help 2>/dev/null); [ $? = 0 ] && grep -q "^Usage: kernel-series " <<<"$h" && grep -q "^Exit status:" <<<"$h" && [ "$(ksx -V)" = "kernel-series 1" ]'
+check "kernel-series: a usage error says what, points to --help, exits 2" 'e=$(ksx --frob 2>&1 >/dev/null); [ $? = 2 ] && [ "$(head -n1 <<<"$e")" = "kernel-series: error: unknown option ${SQ}--frob${SQ}" ] && [ "$(tail -n1 <<<"$e")" = "Help: kernel-series --help" ]'
 check "kernel-series: missing tree and bad arguments exit 2" '"$KSX" --src-root "$T/none" --hook >/dev/null 2>&1; [ $? = 2 ] && { ksx --frob >/dev/null 2>&1; [ $? = 2 ]; } && { ksx >/dev/null 2>&1; [ $? = 2 ]; }'
 H=src/macbook91-hw-fixes-series.hook
 check "hook: runs the installed kernel-series after the transaction, on kernels and on this package" 'grep -qx "Exec = /usr/lib/macbook91-hw-fixes/kernel-series --hook" $H && grep -qx "When = PostTransaction" $H && grep -qx "Target = usr/lib/modules/\*/vmlinuz" $H && grep -qx "Target = usr/src/macbook91-applesmc-\*/dkms.conf" $H && grep -q "/lib/\$(NAME)/kernel-series\"" Makefile && grep -q "hooks/71-macbook91-hw-fixes-series.hook\"" Makefile && [[ 71-macbook91-hw-fixes-series.hook > 70-dkms-install.hook ]]'
@@ -224,6 +231,12 @@ check "keyboard-iso: a user file with iso_layout=1 counts as done" 'mig status |
 echo "options applespi iso_layout=0 fnmode=2" >"$R/etc/modprobe.d/applespi.conf"
 check "keyboard-iso: iso_layout=0 set elsewhere is foreign" 'mig status | grep -q "^keyboard-iso *foreign"'
 check "usage error exits 2" 'mig frobnicate >/dev/null 2>&1; [ $? = 2 ]'
+check "migrate: a usage error names the command, points to --help, exits 2" 'e=$(mig frobnicate 2>&1 >/dev/null); [ $? = 2 ] && [ "$(head -n1 <<<"$e")" = "macbook91-hw-migrate: error: unknown command ${SQ}frobnicate${SQ} (valid: status, plan, apply, rollback)" ] && [ "$(tail -n1 <<<"$e")" = "Help: macbook91-hw-migrate --help" ]'
+check "migrate: an unknown option is a usage error, in any position" 'mig --bogus >/dev/null 2>&1; a=$?; mig apply --bogus >/dev/null 2>&1; b=$?; [ $a = 2 ] && [ $b = 2 ]'
+check "migrate: an unknown step lists the valid ones, exit 2" 'e=$(mig apply nosuch 2>&1); [ $? = 2 ] && grep -q "^macbook91-hw-migrate: error: unknown step ${SQ}nosuch${SQ} (valid: backlight-native, keyboard-iso, hibernate)$" <<<"$e"'
+check "migrate: status and plan take no step IDs" 'mig status backlight-native >/dev/null 2>&1; a=$?; mig plan nosuch >/dev/null 2>&1; b=$?; [ $a = 2 ] && [ $b = 2 ]'
+check "migrate: --help is on stdout with exit 0 and the sections in the fixed order" 'h=$(mig --help 2>/dev/null); [ $? = 0 ] && [ "$(grep -E "^(Usage|Examples|Commands|Options|Files|Exit status|Docs and bug reports):" <<<"$h" | cut -d: -f1 | tr "\n" ,)" = "Usage,Examples,Commands,Options,Files,Exit status,Docs and bug reports," ] && [ -z "$(mig --help 2>&1 >/dev/null)" ]'
+check "migrate: -h works after a command, --version prints name and version" 'mig apply -h | grep -q "^Usage: macbook91-hw-migrate " && [ "$(mig --version)" = "macbook91-hw-migrate dev" ]'
 check "rollback of an unknown step exits 2" 'mkroot 8; mig rollback nosuch >/dev/null 2>&1; [ $? = 2 ]'
 
 # --- verify against a fake system
@@ -311,10 +324,21 @@ check "verify: SPIT disabled is only INFO" 'o=$(ver); grep -q "^INFO wakeup: SPI
 sed -i 's/LID0\t  S4\t\*enabled/LID0\t  S4\t*disabled/' "$R/proc/acpi/wakeup"
 out=$(ver)
 check "verify: LID0 disabled fails" 'grep -q "^FAIL wakeup: LID0" <<<"$out"'
+# Colour (text HIG FAR-3/FAR-4): --color > MACBOOK91_HW_VERIFY_COLOR > NO_COLOR > FORCE_COLOR > terminal.
+check "verify: no colour when stdout is not a terminal" '! ver | grep -q "$ESC"'
+check "verify: FORCE_COLOR colours the keywords, and only them" 'grep -q "$ESC" <<<"$(FORCE_COLOR=1 ver)" && [ "$(FORCE_COLOR=1 ver | sed "s/$ESC\[[0-9;]*m//g")" = "$(ver)" ]'
+check "verify: NO_COLOR beats FORCE_COLOR" '! NO_COLOR=1 FORCE_COLOR=1 ver | grep -q "$ESC"'
+check "verify: --color=always beats NO_COLOR, --color=never beats FORCE_COLOR" 'NO_COLOR=1 ver --color=always | grep -q "$ESC" && ! FORCE_COLOR=1 ver --color=never | grep -q "$ESC"'
+check "verify: the program setting beats NO_COLOR" 'NO_COLOR=1 MACBOOK91_HW_VERIFY_COLOR=always ver | grep -q "$ESC"'
+check "verify: --color with a bad value is a usage error" 'e=$(ver --color=often 2>&1 >/dev/null); [ $? = 2 ] && grep -q "expects auto, always or never" <<<"$e"'
+check "verify: --help is on stdout with exit 0 and the sections in the fixed order" 'h=$(ver --help 2>/dev/null); [ $? = 0 ] && [ "$(grep -E "^(Usage|Examples|Options|Environment|Exit status|Docs and bug reports):" <<<"$h" | cut -d: -f1 | tr "\n" ,)" = "Usage,Examples,Options,Environment,Exit status,Docs and bug reports," ]'
+check "verify: --version prints name and version on stdout, exit 0" 'v=$(ver -V); [ $? = 0 ] && [ "$v" = "macbook91-hw-verify dev" ]'
+check "verify: a usage error names the option, points to --help, exits 2" 'e=$(ver --bogus 2>&1 >/dev/null); [ $? = 2 ] && [ "$(head -n1 <<<"$e")" = "macbook91-hw-verify: error: unknown option ${SQ}--bogus${SQ}" ] && [ "$(tail -n1 <<<"$e")" = "Help: macbook91-hw-verify --help" ]'
+check "verify: an extra argument is a usage error" 'ver --deep extra >/dev/null 2>&1; [ $? = 2 ]'
 echo "MacBookPro12,1" >"$R/sys/class/dmi/id/product_name"
-ver >/dev/null; rc=$?
+o=$(ver 2>/dev/null); rc=$?; e=$(ver 2>&1 >/dev/null)
 check "verify: other model exits 3" '[ $rc = 3 ]'
-check "verify: usage error exits 2" 'ver --bogus >/dev/null 2>&1; [ $? = 2 ]'
+check "verify: other model says so on stderr and prints nothing on stdout" '[ -z "$o" ] && grep -q "^macbook91-hw-verify: error: this machine is .*not an Apple MacBook9,1; nothing to check$" <<<"$e"'
 
 # --- kernel module builds (only where the running kernel's headers are installed)
 KB=/lib/modules/$(uname -r)/build
@@ -341,13 +365,38 @@ if command -v makepkg >/dev/null; then
 	sed -i "s/^sha256sums=('0000')/sha256sums=('$(sha "$RR/dist/macbook91-hw-fixes-$v.tar")')/" "$RR"/packaging/arch/PKGBUILD
 	check "promote: refuses a stale .SRCINFO" '! prom >/dev/null 2>&1 && [ ! -e "$RR/release/$v" ]'
 	(cd "$RR"/packaging/arch && makepkg --printsrcinfo >.SRCINFO 2>/dev/null)
+	check "promote: -n runs the checks, lists what it would promote and changes nothing" 'o=$(prom -n 2>&1); [ $? = 0 ] && [ ! -e "$RR/release/$v" ] && grep -q "^dry run: the checks passed" <<<"$o" && grep -q "^  dist/macbook91-hw-fixes-$v-1-any.pkg.tar.zst$" <<<"$o"'
+	check "promote: -n still refuses what a promotion would refuse" 'sed -i "s/^pkgver=.*/pkgver=1.1/" "$RR"/packaging/arch/PKGBUILD; prom -n >/dev/null 2>&1; r=$?; sed -i "s/^pkgver=.*/pkgver=$v/" "$RR"/packaging/arch/PKGBUILD; [ $r = 1 ]'
 	check "promote: copies, seals and records the package checksum" 'prom >/dev/null 2>&1 && (cd "$RR/release/$v" && sha256sum -c --quiet SHA256SUMS) && grep -q "^$(sha "$RR/dist/macbook91-hw-fixes-$v-1-any.pkg.tar.zst")  macbook91-hw-fixes-$v-1-any.pkg.tar.zst" "$RR/release/$v/STATUS.txt"'
 	check "promote: keeps the two newest releases" '[ -d "$RR/release/20260201.01" ] && [ ! -e "$RR/release/20260101.01" ]'
 	check "promote: never overwrites a release" '! prom >/dev/null 2>&1'
 	check "promote: --seal refuses a STATUS.txt with TODO" '! prom --seal "$v" >/dev/null 2>&1'
+	check "promote: --seal names the next command when STATUS.txt has TODO lines" 'e=$(prom --seal "$v" 2>&1 >/dev/null); grep -q "^  Fill it in, then run: packaging/promote-release.sh --seal $v$" <<<"$e"'
 	sed -i 's/TODO.*/filled in/' "$RR/release/$v/STATUS.txt"
+	check "promote: refusals use the error form with the next command" 'e=$(prom 2>&1 >/dev/null); grep -q "^promote-release.sh: error: release/$v already exists" <<<"$e" && grep -q "^  For a new release " <<<"$e"'
 	check "promote: --seal covers the filled-in STATUS.txt" 'prom --seal "$v" >/dev/null && (cd "$RR/release/$v" && sha256sum -c --quiet SHA256SUMS)'
 fi
+
+# --- command-line interface of the repository tools (text HIG: help, version, usage errors)
+for tool in tools/dev-backlight-check.sh tools/dev-suspend-series.sh kernel/applesmc/add-series.sh packaging/promote-release.sh; do
+	n=$(basename "$tool")
+	check "$n: --help is the full help on stdout, exit 0, nothing on stderr" 'o=$("$tool" --help 2>"$T/err"); [ $? = 0 ] && [ ! -s "$T/err" ] && grep -q "^Usage: \(sudo \)\?$n" <<<"$o" && grep -q "^Exit status:" <<<"$o" && [ "$(tail -n1 <<<"$o")" = "Docs and bug reports: https://github.com/Weegee/macbook91-hw-fixes-pub" ]'
+	check "$n: -h works like --help, also after other arguments" '[ "$("$tool" -h)" = "$("$tool" --help)" ] && [ "$("$tool" -V)" = "$("$tool" --version)" ]'
+	check "$n: --version prints its name and the version of this repository" '[ "$("$tool" --version)" = "$n $(cat VERSION)" ]'
+	check "$n: an unknown option is a usage error: error form, Help pointer, exit 2, stdout empty" 'o=$("$tool" --bogus 2>"$T/err"); rc=$?; [ $rc = 2 ] && [ -z "$o" ] && [ "$(sed -n 1p "$T/err")" = "$n: error: unknown option $SQ--bogus$SQ" ] && [ "$(sed -n 2p "$T/err")" = "Help: $n --help" ]'
+done
+check "mkdist: --help is the full help on stdout, exit 0, nothing on stderr" 'o=$(python3 packaging/mkdist.py --help 2>"$T/err"); [ $? = 0 ] && [ ! -s "$T/err" ] && grep -q "^Usage: mkdist.py" <<<"$o" && grep -q "^Exit status:" <<<"$o"'
+check "mkdist: --version prints its name and the version of this repository" '[ "$(python3 packaging/mkdist.py --version)" = "mkdist.py $(cat VERSION)" ]'
+check "mkdist: an unknown option is a usage error: error form, Help pointer, exit 2" 'o=$(python3 packaging/mkdist.py --bogus 2>"$T/err"); rc=$?; [ $rc = 2 ] && [ -z "$o" ] && grep -q "^mkdist.py: error: " "$T/err" && [ "$(tail -n1 "$T/err")" = "Help: mkdist.py --help" ]'
+check "dev tools: bad arguments are refused before the root check" '! grep -q "needs root" <<<"$(tools/dev-backlight-check.sh bogus 2>&1)" && ! grep -q "needs root" <<<"$(tools/dev-suspend-series.sh bogus 2>&1)"'
+check "add-series: refuses without a tag: usage error, exit 2" '"$T/asx/add-series.sh" >/dev/null 2>"$T/err"; [ $? = 2 ] && grep -q "^add-series.sh: error: " "$T/err"'
+check "add-series: result and progress go to stderr, stdout stays empty" 'rm -rf "$T/asy" && mkdir -p "$T/asy" && cp -r "$AS"/add-series.sh "$AS"/0001-applesmc-charge-limit-through-BCLM.patch "$AS"/UPSTREAM.lock "$AS"/dkms.conf "$AS"/upstream "$T/asy/" && o=$(MACBOOK91_APPLESMC_SRC="$AS/upstream/7.2/applesmc.c" "$T/asy/add-series.sh" v9.9.2 2>"$T/err"); [ -z "$o" ] && grep -q "^add-series.sh: note: pinned Linux 9.9" "$T/err"'
+
+# --- pacman scriptlet: messages in the house form on stderr
+INST=packaging/arch/macbook91-hw-fixes.install
+check "scriptlet: valid bash" 'bash -n "$INST"'
+check "scriptlet: no banner-style messages, every message goes through _msg to stderr" '! grep -q "echo \":: " "$INST" && ! grep -q "printf .*macbook91-hw-fixes: " <(grep -v "^    printf" "$INST") && grep -q "^_msg()" "$INST" && grep -q ">&2" "$INST"'
+check "scriptlet: _msg writes note: and warning: lines with indented continuation lines on stderr" '(eval "$(sed -n "/^_msg()/,/^}/p" "$INST")"; o=$(_msg note "one" "two" 2>&1 >/dev/null); [ "$o" = "$(printf "macbook91-hw-fixes: note: one\n  two")" ] && o=$(_msg warning "w" 2>&1 >/dev/null) && [ "$o" = "macbook91-hw-fixes: warning: w" ] && [ -z "$(_msg note x 2>/dev/null)" ])'
 
 # --- package contents
 if [ -n "${PKGDIR_CHECK:-}" ]; then
@@ -356,6 +405,7 @@ if [ -n "${PKGDIR_CHECK:-}" ]; then
 	check "package: applesmc DKMS tree with patched sources for every series" '(d=$PKGDIR_CHECK/usr/src/macbook91-applesmc-$(cat VERSION); grep -qx "PACKAGE_VERSION=\"$(cat VERSION)\"" "$d/dkms.conf" && for s in "$AS"/upstream/*/; do grep -q "applesmc_charge_attach" "$d/$(basename "$s")/applesmc.c" || exit 1; done)'
 	check "package: NVMe udev rule installed" '[ -f "$PKGDIR_CHECK/usr/lib/udev/rules.d/60-macbook91-nvme-d3cold.rules" ]'
 	check "package: tools installed executable" '[ -x "$PKGDIR_CHECK/usr/bin/macbook91-hw-verify" ] && [ -x "$PKGDIR_CHECK/usr/bin/macbook91-hw-migrate" ]'
+	check "package: the installed tools carry the package version (--version)" '(for t in macbook91-hw-verify macbook91-hw-migrate; do grep -qx "VERSION=$(cat VERSION)" "$PKGDIR_CHECK/usr/bin/$t" || exit 1; done)'
 	check "package: kernel-series of this version, the hook and TESTED-SERIES installed" 'k=$PKGDIR_CHECK/usr/lib/macbook91-hw-fixes/kernel-series; [ -x "$k" ] && grep -qx "PKGVER=$(cat VERSION)" "$k" && [ -f "$PKGDIR_CHECK/usr/share/libalpm/hooks/71-macbook91-hw-fixes-series.hook" ] && cmp -s kernel/TESTED-SERIES "$PKGDIR_CHECK/usr/src/macbook91-backlight-$(cat VERSION)/TESTED-SERIES"'
 	check "package: kernel-series answers from the packaged trees" '(k=$PKGDIR_CHECK/usr/lib/macbook91-hw-fixes/kernel-series; for s in "$AS"/upstream/*/; do "$k" --src-root "$PKGDIR_CHECK/usr/src" --modules-root "$T/none" --applesmc "$(basename "$s").1-test" >/dev/null || exit 1; done; ! "$k" --src-root "$PKGDIR_CHECK/usr/src" --modules-root "$T/none" --applesmc 9.9.1-test >/dev/null)'
 fi

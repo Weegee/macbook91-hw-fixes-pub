@@ -18,16 +18,63 @@
 # user's ~/.local/state/macbook91-hw-fixes/suspend). MACs masked. Run it with sudo: the
 # invoking user (SUDO_USER) is the session whose desktop and audio the checks use.
 set -uo pipefail
+PROG=${0##*/}
+err() { printf '%s: error: %s\n' "$PROG" "$*" >&2; }
+usage_error() { err "$@"; printf 'Help: %s --help\n' "$PROG" >&2; exit 2; }
+usage() {
+	cat <<EOT
+Usage: sudo $PROG MODE N [LOAD] [SLEEP] [PAUSE]
+
+Run N suspend/resume cycles the way the desktop does it (systemctl suspend)
+with an RTC alarm as the only planned wake source, and check the machine after
+every cycle. A development helper for the maintainer's test machine, not
+packaged. It really suspends the machine: run it only with the user present.
+
+Examples:
+  sudo $PROG deep 10
+      ten cycles in deep sleep, idle
+  sudo $PROG s2idle 5 all 30 20
+      five s2idle cycles under all loads
+
+Arguments:
+  MODE    deep or s2idle, written to /sys/power/mem_sleep and restored at exit
+  N       number of cycles, a positive whole number
+  LOAD    idle, wlan, audio, camera or all, kept running across the cycles
+  SLEEP   seconds until the RTC alarm (default 20)
+  PAUSE   seconds between cycles (default 15)
+
+Options:
+  -h, --help       show this help
+  -V, --version    show the version of this repository
+
+Environment:
+  LOGDIR   where the TSV log and the report go (default: the invoking user's
+           ~/.local/state/macbook91-hw-fixes/suspend)
+
+Exit status:
+  0  all cycles passed
+  1  a cycle failed
+  2  usage error or not root (run it with sudo from the desktop user's session)
+
+Docs and bug reports: https://github.com/Weegee/macbook91-hw-fixes-pub
+EOT
+}
+case ${1:-} in
+-h | --help) usage; exit 0 ;;
+-V | --version) printf '%s %s\n' "$PROG" "$(cat "$(dirname "$0")/../VERSION" 2>/dev/null || echo dev)"; exit 0 ;;
+-?*) usage_error "unknown option '$1'" ;;
+esac
 MODE=${1:-} N=${2:-} LOAD=${3:-idle} SLEEP=${4:-20} PAUSE=${5:-15}
 OWN_INHIBITOR=macbook91-hw-fixes
 IOFILE=/var/tmp/macbook91-suspend-io.bin
 
-case $MODE in deep | s2idle) ;; *) echo "MODE must be deep or s2idle" >&2; exit 2 ;; esac
-[[ $N =~ ^[0-9]+$ ]] && [ "$N" -gt 0 ] || { echo "N must be a positive number" >&2; exit 2; }
-case $LOAD in idle | wlan | audio | camera | all) ;; *) echo "bad LOAD" >&2; exit 2 ;; esac
-[ "$(id -u)" = 0 ] || { echo "needs root" >&2; exit 2; }
+case $MODE in deep | s2idle) ;; *) usage_error "MODE must be deep or s2idle, not '$MODE'" ;; esac
+[[ $N =~ ^[0-9]+$ ]] && [ "$N" -gt 0 ] || usage_error "N must be a positive whole number, not '$N'"
+case $LOAD in idle | wlan | audio | camera | all) ;; *) usage_error "LOAD must be idle, wlan, audio, camera or all, not '$LOAD'" ;; esac
+[[ $SLEEP =~ ^[0-9]+$ ]] && [[ $PAUSE =~ ^[0-9]+$ ]] || usage_error "SLEEP and PAUSE must be whole numbers of seconds"
+[ "$(id -u)" = 0 ] || { err "needs root"; printf '  Run: sudo %s %s\n' "$0" "$*" >&2; exit 2; }
 user=${SUDO_USER:-}
-{ [ -n "$user" ] && [ "$user" != root ]; } || { echo "run it with sudo from the desktop user's session (SUDO_USER is empty or root)" >&2; exit 2; }
+{ [ -n "$user" ] && [ "$user" != root ]; } || { err "SUDO_USER is empty or root"; printf '  Run it with sudo from the desktop user'"'"'s session: sudo %s %s\n' "$0" "$*" >&2; exit 2; }
 LOGDIR=${LOGDIR:-$(getent passwd "$user" | cut -d: -f6)/.local/state/macbook91-hw-fixes/suspend}
 
 mask() { sed -E 's/([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}/MAC/g'; }
@@ -59,7 +106,7 @@ bl=$(ls -d /sys/class/backlight/* | head -n1)
 
 start_loads() {
 	if [ "$LOAD" = wlan ] || [ "$LOAD" = all ]; then
-		[ -n "$gateway" ] || { echo "LOAD wlan: no default route" >&2; exit 2; }
+		[ -n "$gateway" ] || { err "LOAD wlan needs a default route and there is none"; exit 2; }
 		ping -q -i 0.2 "$gateway" >/dev/null 2>&1 &
 		pids+=($!)
 	fi
