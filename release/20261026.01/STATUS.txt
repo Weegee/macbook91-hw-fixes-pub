@@ -1,0 +1,61 @@
+macbook91-hw-fixes 20261026.01-1 - RELEASED (tag v20261026.01, 2026-10-26; released without the hardware gate, which is NOT_RUN)
+
+What: kernel series. The LTS kernel is the package's default, and a pacman
+hook reports every installed kernel the two DKMS modules do not cover. The
+module sources and the udev rule are unchanged.
+- New /usr/lib/macbook91-hw-fixes/kernel-series and the pacman hook
+  71-macbook91-hw-fixes-series.hook (after 70-dkms-install.hook, on kernel
+  installs and upgrades and on this package): a WARNING block for each
+  installed kernel of a series without an applesmc source (no charge limit of
+  this package there, boot the LTS kernel), one note line for a series
+  macbook91_backlight is not tested on (new kernel/TESTED-SERIES: 6.18, 7.2).
+  It builds nothing and never stops the transaction. The install scriptlet
+  and macbook91-hw-verify ask the same script.
+- macbook91-hw-verify on such a kernel names the kernel's own SMC driver
+  (macsmc-acpi, applesmc or none) instead of claiming that in-tree applesmc
+  runs, reports a charge_control_end_threshold of another power supply as
+  INFO, and reports an untested backlight series as INFO.
+- depends: linux-cachyos-lts-headers (pulls in linux-cachyos-lts) and
+  findutils; optdepends: linux-cachyos-headers. All inside package().
+- No 7.3 series for macbook91-applesmc: CachyOS 7.3 builds no applesmc and
+  brings its own SMC driver macsmc-acpi, which uses the SMC ports without
+  reserving them; a 7.3 applesmc would load next to it by its DMI alias
+  (docs/FINDINGS.md). The patch applies to v7.3 with fuzz 0 and builds
+  against the 7.3.0-4 headers; that is not the obstacle. The series 6.18 and
+  7.2 stay. Open, for the maintainer: rely on the kernel's macsmc on 7.3
+  after a check on the hardware, or build applesmc for 7.3 and keep
+  macsmc-acpi from loading.
+- Details: docs/CHANGELOG.md.
+
+Source tarball against that of 20261021.01: the module sources, their
+Makefiles, the applesmc patch and upstream copies, UPSTREAM.lock and the udev
+rule are unchanged (the packaged DKMS trees differ from the installed
+20261021.01 trees only in PACKAGE_VERSION, plus the new TESTED-SERIES).
+
+Measured without hardware (2026-10-26):
+- make dist: built twice from the committed tree, identical, sha256
+  5e7e737057b575ec9e588061d866a152379b96d3957db6d8490721f02e08184c, the one
+  pinned in PKGBUILD; make arch-pkg builds the package from it; makepkg
+  --verifysource OK; .SRCINFO current.
+- tests/run-tests.sh: 114 passed, 0 failed (hermetic, fake roots, kernel
+  builds against the running 6.18.55-2-cachyos-lts headers); 121 passed,
+  0 failed with the package-content checks on the extracted package.
+- namcap: no findings for the PKGBUILD; seven dependency warnings for the
+  package (listed by design), 0 errors. ShellCheck at warning level, bash -n
+  and git diff --check clean.
+- Scratch builds of the patched applesmc: 6.18.55-2 (gcc), 7.2.11-1 (headers
+  from the package cache, unpacked, not installed) and 7.3.0-4 (clang, not
+  packaged): exit 0, vermagic matches. macbook91_backlight from the packaged
+  tree against 6.18.55-2 and 7.3.0-4: exit 0.
+- The packaged kernel-series against the installed kernels (6.18.55-2-cachyos-lts,
+  7.3.0-4-cachyos), read-only: one WARNING block for 7.3 naming macsmc-acpi,
+  one backlight note for 7.3, nothing for 6.18.
+
+NOT_RUN (hardware gate, open): install with pacman -U, DKMS builds for 6.18
+and 7.3 and the hook output in that transaction, a boot into 7.3 and into the
+LTS kernel, macbook91-hw-verify on both, the charge limit on the LTS kernel,
+the backlight, deep suspend. NOT_RUN: the charge limit of the kernel's
+macsmc-power on 7.3.
+
+Built package (not tracked; local build, makepkg output differs per machine):
+0c24c9bdb3d5dd8cedd0824a2a9f4de189633ad3a33f1b881969782604fef272  macbook91-hw-fixes-20261026.01-1-any.pkg.tar.zst
