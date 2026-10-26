@@ -6,6 +6,43 @@ measured, the package checksum) is `release/<version>/STATUS.txt`; the
 release tool keeps at most the two newest releases in the tree, older releases
 are not part of this repository.
 
+## 20261026.01
+
+**Kernel series: the LTS kernel is the default, and a pacman hook reports
+every installed kernel the two modules do not cover. CachyOS 7.3 gets no
+charge limit from this package, because that kernel brings its own Apple SMC
+driver. The module sources and the udev rule are unchanged.**
+
+- New `/usr/lib/macbook91-hw-fixes/kernel-series` and the pacman hook
+  `71-macbook91-hw-fixes-series.hook` (after `70-dkms-install.hook`, on kernel
+  installs and upgrades and on this package): a WARNING block for each
+  installed kernel of a series without an applesmc source, one note line for a
+  series `macbook91_backlight` is not tested on (`kernel/TESTED-SERIES`, new:
+  6.18 and 7.2). It builds nothing and never stops the transaction. The
+  install scriptlet and `macbook91-hw-verify` ask the same script.
+- `macbook91-hw-verify` on such a kernel: names the kernel's own SMC driver
+  (`macsmc-acpi`, `applesmc` or none) instead of claiming that in-tree applesmc
+  runs; a `charge_control_end_threshold` of another power supply (the kernel's
+  `macsmc-battery`) is reported as INFO, not passed; an untested backlight
+  series is an INFO line. The running release is read from
+  `/proc/sys/kernel/osrelease`.
+- The package depends on `linux-cachyos-lts-headers` (pulls in
+  `linux-cachyos-lts`); `linux-cachyos-headers` is optional. Both stay in
+  `package()`, so a build host without the CachyOS repositories can build the
+  package. `findutils` is listed for `kernel-series`.
+- No 7.3 series for `macbook91-applesmc`: CachyOS 7.3.0-1 turns
+  `CONFIG_SENSORS_APPLESMC` off, and its kernel brings `macsmc-acpi`, which
+  drives the same SMC ports without reserving them; the two must not run at
+  once (`docs/FINDINGS.md`). The patch applies to `v7.3` with fuzz 0 and
+  builds against the 7.3.0-4 headers; that is not the obstacle. The series
+  6.18 and 7.2 stay: the unchanged patch applies to both and builds against
+  the 6.18.55-2 and 7.2.11-1 headers.
+- README: a Kernel series section replaces the copies of the series list;
+  `add-series.sh` names the second-driver check.
+- Tests: kernel-series modes and hook file, the dkms.conf regex equals the
+  upstream directories exactly, a fake 7.3 kernel with `macsmc-acpi` in the
+  verifier, package contents.
+
 ## 20261021.01
 
 **First release prepared for the public repository: changes to the shipped

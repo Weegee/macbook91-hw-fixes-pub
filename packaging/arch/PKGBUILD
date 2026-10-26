@@ -9,7 +9,7 @@
 
 pkgbase=macbook91-hw-fixes
 pkgname=(macbook91-hw-fixes)
-pkgver=20261021.01
+pkgver=20261026.01
 pkgrel=1
 pkgdesc="Hardware fixes and checks for the Apple MacBook9,1 (A1534): backlight, charge limit, NVMe, lid wake"
 arch=('any')
