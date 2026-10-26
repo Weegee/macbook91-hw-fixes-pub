@@ -1,0 +1,53 @@
+macbook91-hw-fixes 20261026.02-1 - RELEASED (tag v20261026.02, 2026-10-26; released without the hardware gate, which is NOT_RUN)
+
+What: the text interfaces follow the house text guidelines (HIG): help,
+version, error and warning messages, colour and exit codes. The modules, the
+hook file, the udev rule and the migration steps are unchanged.
+- macbook91-hw-verify, macbook91-hw-migrate and kernel-series take
+  -h/--help and -V/--version; usage errors exit 2 with "program: error: ..."
+  and "Help: program --help". The installed tools print the package version.
+- macbook91-hw-verify: --color=WHEN, --no-color, NO_COLOR and FORCE_COLOR;
+  colour only on the PASS/WARN/FAIL keywords. The PASS/WARN/FAIL/INFO lines
+  and the RESULT line are unchanged. On another machine than a MacBook9,1 the
+  message moved from an INFO line on stdout to an error on stderr (exit 3).
+- macbook91-hw-migrate: arguments are validated before the root check, the
+  root error names the sudo command, SIGINT/SIGTERM end with 130/143. The
+  status and plan lines are unchanged. Deviations kept: no header line in
+  status (TYP-3, it is read by the verifier), and the dry run is the command
+  plan (ARG-4, GEF-3).
+- The pacman hook and the install scriptlet write "macbook91-hw-fixes:
+  warning: ..." and "... note: ..." lines to stderr instead of a WARNING
+  banner and ":: macbook91-hw-fixes:" lines; next steps are commands to copy.
+- Repository tools (not packaged): add-series.sh, the two dev tools,
+  promote-release.sh (new -n) and mkdist.py follow the same forms.
+- Details: docs/CHANGELOG.md.
+
+Source tarball against that of 20261026.01: the module sources, their
+Makefiles, the applesmc patch and upstream copies, UPSTREAM.lock, the udev
+rule and the pacman hook file are unchanged.
+
+Measured without hardware (2026-10-26):
+- make dist: built twice from the committed tree, identical, sha256
+  7c3716678670958fe1430d162cbb00e42dbb8555462d3a0fa04f5ffd8b00d3c4, the one
+  pinned in PKGBUILD; make arch-pkg builds the package from it; .SRCINFO
+  current (promote-release.sh checks it).
+- tests/run-tests.sh: 163 passed, 0 failed (hermetic, fake roots, kernel
+  builds against the running 6.18.55-2-cachyos-lts headers); 171 passed,
+  0 failed with the package-content checks on the extracted package.
+- namcap: no findings for the PKGBUILD; seven dependency warnings for the
+  package (listed by design), 0 errors. ShellCheck at warning level, bash -n
+  and git diff --check clean.
+- Local gate of promote-release.sh: the private test script 23 passed, 0
+  failed, 0 blocked; the export guard 0 hits.
+- macbook91-hw-verify from the working tree on the test machine (a
+  MacBook9,1, installed package still 20261026.01): pass=23 warn=0 fail=0.
+- All help texts fit 80 columns; -h/--help exit 0 and print nothing on stderr.
+
+NOT_RUN (hardware gate, open): install with pacman -U and the hook and
+scriptlet output in that transaction, DKMS builds, a reboot, the installed
+macbook91-hw-verify, the dev tools' measuring runs (backlight ramp and zero,
+suspend cycles; they need root or a suspend; only help, version and argument
+errors were exercised).
+
+Built package (not tracked; local build, makepkg output differs per machine):
+2fb43faa2c1709d1a274e65b956c7eae9ec6d4422ea5cdf28757b0f2d6dbecf0  macbook91-hw-fixes-20261026.02-1-any.pkg.tar.zst
