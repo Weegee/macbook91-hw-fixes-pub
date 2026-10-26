@@ -29,12 +29,19 @@ makedepends=('make' 'patch')
 source=("$pkgbase-$pkgver.tar")
 sha256sums=('4f72b6dd9d5c0b726889b755cc936f6c13248c09dcd9d783cf950aa64e42a5f0')
 
-# Dependencies sit in package_*() as in the driver packages. This package
+# Dependencies sit in package_*() as in the driver packages: makepkg does not
+# check them at build time, so a build host without the CachyOS repositories
+# can build the package, and the package still carries them. This package
 # stands on its own: the audio, camera and wireless driver packages are
-# separate and not required.
+# separate and not required. The LTS kernel is the default: DKMS builds a
+# module only for a kernel whose headers are installed, and
+# linux-cachyos-lts-headers pulls in linux-cachyos-lts itself. Which kernel
+# series the modules cover: kernel/applesmc/UPSTREAM.lock and
+# kernel/TESTED-SERIES, reported by the pacman hook.
 package_macbook91-hw-fixes() {
-    depends=('bash' 'coreutils' 'grep' 'sed' 'systemd' 'dkms')
-    optdepends=('limine-mkinitcpio-hook: lets macbook91-hw-migrate apply kernel parameters on Limine'
+    depends=('bash' 'coreutils' 'findutils' 'grep' 'sed' 'systemd' 'dkms' 'linux-cachyos-lts-headers')
+    optdepends=('linux-cachyos-headers: DKMS builds the modules for linux-cachyos as well'
+                'limine-mkinitcpio-hook: lets macbook91-hw-migrate apply kernel parameters on Limine'
                 'nvme-cli: lets macbook91-hw-verify read the NVMe health log (as root)')
     install="$pkgbase.install"
 
