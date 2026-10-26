@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-21T16:52+02:00",
+  "updated": "2026-10-26T21:00+01:00",
   "kernel": "6.18.55-2-cachyos-lts",
   "runs": [
     {
@@ -431,6 +431,36 @@
       "test": "release 20261021.01 runtime of the modules and the udev rule (install, DKMS build by DKMS, module reload, macbook91-hw-verify)",
       "result": "NOT_RUN",
       "detail": "carried over from 20261020.02 and 20261020.01: kernel/ and udev/ are byte for byte identical to 20261020.02, only the embedded package version follows pkgver; macbook91-hw-verify pass=26 warn=0 fail=0 on 6.18.55-2-cachyos-lts was run with 20261020.01-1. The suite compiles both modules against the headers of the running kernel; that build was not compared with the installed modules for this release."
+    },
+    {
+      "test": "release 20261026.01: tests/run-tests.sh (hermetic, kernel builds against the running 6.18.55-2-cachyos-lts headers), make dist twice, make arch-pkg, the suite with package contents, namcap, makepkg --printsrcinfo and --verifysource, ShellCheck, bash -n, git diff --check",
+      "result": "PASS",
+      "detail": "2026-10-26: 114 passed, 0 failed; 121 passed, 0 failed with the package-content checks on the extracted package (PKGDIR_CHECK); source tarball built twice from the committed tree, identical (sha256 5e7e7370…), equal to the PKGBUILD pin; makepkg --verifysource OK; .SRCINFO current; namcap: no findings for the PKGBUILD, seven dependency warnings for the package (coreutils, findutils, grep, sed, systemd, dkms, linux-cachyos-lts-headers, listed by design), 0 errors."
+    },
+    {
+      "test": "release 20261026.01 kernel-series and pacman hook against the installed kernels (packaged script, packaged DKMS trees, real /usr/lib/modules: 6.18.55-2-cachyos-lts, 7.3.0-4-cachyos)",
+      "result": "PASS",
+      "detail": "2026-10-26, read-only, no install: one WARNING block for 7.3.0-4-cachyos naming macsmc-acpi, one backlight note for 7.3, nothing for 6.18; --applesmc for the running 6.18 kernel exit 0."
+    },
+    {
+      "test": "release 20261026.01 applesmc series: v7.3 (newest, mainline 2026-10-18, no 7.3.y yet) with the unchanged patch (fuzz 0) and a scratch build against the 7.3.0-4-cachyos headers; the 7.2 rule (unchanged patch on v7.2.9, build against the 7.2.11-1-cachyos headers from the package cache, unpacked, not installed); 6.18.55-2 build",
+      "result": "PASS",
+      "detail": "2026-10-26: the patch applies to v7.3 with fuzz 0; builds exit 0 for 6.18.55-2 (gcc, no warnings), 7.2.11-1 and 7.3.0-4 (clang, LLVM=1; the only warning is kbuild's note that clang 23.1.4 differs from the kernel's 23.1.3), vermagic matches each kernel. 7.2 stays. 7.3 is not pinned: that kernel brings macsmc-acpi, which drives the SMC ports without reserving them, and the 7.3 module would load next to it by its DMI alias (dmi*:pn*MacBook*:rvn*Apple*:); docs/FINDINGS.md."
+    },
+    {
+      "test": "release 20261026.01 module identity: the packaged DKMS trees against the installed 20261021.01 trees (diff -r); macbook91_backlight from the packaged tree built against 6.18.55-2 and 7.3.0-4",
+      "result": "PASS",
+      "detail": "2026-10-26: applesmc tree differs only in PACKAGE_VERSION of dkms.conf; backlight tree only in PACKAGE_VERSION and the new TESTED-SERIES; both backlight builds exit 0, vermagic matches."
+    },
+    {
+      "test": "release 20261026.01 hardware gate: pacman -U, DKMS builds for 6.18 and 7.3, hook output in the transaction, reboot into 7.3 and into the LTS kernel, macbook91-hw-verify, charge_control_end_threshold, backlight, deep suspend",
+      "result": "NOT_RUN",
+      "detail": "the maintainer released 20261026.01 without the hardware gate (machine not available); the steps stay open."
+    },
+    {
+      "test": "Linux 7.3 (CachyOS 7.3.0-4): charge limit of the kernel's macsmc-power (macsmc-battery charge_control_end_threshold, Plasma)",
+      "result": "NOT_RUN",
+      "detail": "source evidence only (docs/FINDINGS.md); needs a boot into 7.3 and a check on the hardware before a decision on the 7.3 charge limit."
     }
   ]
 }
