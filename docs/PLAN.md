@@ -100,6 +100,9 @@ Superseded points carry "→ SUPERSEDED"; README.md and FINDINGS.md are authorit
    `macbook91-hw-verify` pass=26 warn=0 fail=0, all five DKMS modules installed for 6.18, the
    charge limit readable (100 %, read only). (d) on 6.18, i.e. persistence across suspend and
    reboot, and (f) remain NOT VERIFIED; no suspend happened in that boot.
+   → 2026-10-26: CachyOS 7.3 builds no applesmc and ships its own SMC driver `macsmc-acpi`
+   instead; no 7.3 series for `macbook91-applesmc` (the two must not share the SMC ports), the
+   pacman hook warns on 7.3 (`docs/FINDINGS.md`, kernel 7.3). Open: the charge limit on 7.3.
    Risks: replacing an in-tree module (maintenance on kernel updates, DKMS override in
    /updates), unknown effect of the firmware, same situation as with applesmc-next (limit ±3 %, REPORTED).
 
