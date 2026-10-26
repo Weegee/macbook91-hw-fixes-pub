@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-26T21:00+01:00",
+  "updated": "2026-10-26T22:40+01:00",
   "kernel": "6.18.55-2-cachyos-lts",
   "runs": [
     {
@@ -461,6 +461,26 @@
       "test": "Linux 7.3 (CachyOS 7.3.0-4): charge limit of the kernel's macsmc-power (macsmc-battery charge_control_end_threshold, Plasma)",
       "result": "NOT_RUN",
       "detail": "source evidence only (docs/FINDINGS.md); needs a boot into 7.3 and a check on the hardware before a decision on the 7.3 charge limit."
+    },
+    {
+      "test": "release 20261026.02 (text HIG): tests/run-tests.sh (hermetic, kernel builds against the running 6.18.55-2-cachyos-lts headers), with package contents of the built package, make dist twice (identical), make arch-pkg, namcap, ShellCheck, bash -n, git diff --check",
+      "result": "PASS",
+      "detail": "2026-10-26: 163 passed, 0 failed; 171 passed, 0 failed with the package contents; make dist is reproducible (sha256 7c371667…); namcap reports only 'dependency may not be needed' warnings; installed tools carry the package version."
+    },
+    {
+      "test": "release 20261026.02 interfaces: -h/--help (exit 0, stdout only, 80 columns), -V/--version, usage errors (exit 2, 'Help:' line), colour precedence of macbook91-hw-verify, hook and scriptlet message form, promote-release.sh -n",
+      "result": "PASS",
+      "detail": "2026-10-26: covered by the hermetic suite (the 'tool: --help', 'verify: colour', 'hook:' and 'promote:' checks); macbook91-hw-verify from the working tree on the test machine: pass=23 warn=0 fail=0 (installed package still 20261026.01)."
+    },
+    {
+      "test": "release 20261026.02 dev tools tools/dev-backlight-check.sh and tools/dev-suspend-series.sh: ramp, zero and suspend cycles",
+      "result": "NOT_RUN",
+      "detail": "only help, version and argument errors were exercised (they need no root); the measuring runs need root, a suspend or the backlight and are unchanged apart from messages."
+    },
+    {
+      "test": "release 20261026.02 hardware gate: pacman -U, DKMS builds, hook output in a real transaction, reboot, macbook91-hw-verify from the installed package",
+      "result": "NOT_RUN",
+      "detail": "needs the owner (sudo password, reboot); the release is not conditional on it, as for 20261026.01. The hook text change is covered by the hermetic tests only."
     }
   ]
 }
