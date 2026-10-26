@@ -32,10 +32,13 @@ NAME = "macbook91-hw-fixes"
 FILES = (
     "src/macbook91-hw-migrate",
     "src/macbook91-hw-verify",
+    "src/kernel-series",
+    "src/macbook91-hw-fixes-series.hook",
     "sleep/macbook91-lid-wake",
     "kernel/macbook91_backlight.c",
     "kernel/Makefile",
     "kernel/dkms.conf",
+    "kernel/TESTED-SERIES",
     "kernel/applesmc/0001-applesmc-charge-limit-through-BCLM.patch",
     "kernel/applesmc/Makefile",
     "kernel/applesmc/UPSTREAM.lock",

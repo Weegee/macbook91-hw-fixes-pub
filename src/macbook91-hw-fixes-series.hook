@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# After every transaction that installs or upgrades a kernel, or this package,
+# report each installed kernel of a series the package does not cover
+# (kernel-series --hook): a WARNING block when macbook91-applesmc (the charge
+# limit) has no source for it, a note when macbook91_backlight is not tested
+# on it. It builds nothing and never fails the transaction: dkms.conf's
+# BUILD_EXCLUSIVE_KERNEL already makes DKMS skip such a kernel for applesmc,
+# and this says so where the user sees it. Installed as
+# 71-macbook91-hw-fixes-series.hook, which sorts after 70-dkms-install.hook,
+# so the report follows DKMS's own output.
+
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = usr/lib/modules/*/vmlinuz
+Target = usr/src/macbook91-applesmc-*/dkms.conf
+
+[Action]
+Description = Checking installed kernels against the series macbook91-hw-fixes covers...
+When = PostTransaction
+Exec = /usr/lib/macbook91-hw-fixes/kernel-series --hook

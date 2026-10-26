@@ -16,20 +16,15 @@ _nvme_d3cold() {
 
 # DKMS builds the applesmc replacement (charge limit) during the transaction
 # for every kernel series it has a source for; the running in-tree applesmc
-# stays until it is reloaded or the next boot.
+# stays until it is reloaded or the next boot. Kernels of another series get a
+# WARNING from the pacman hook 71-macbook91-hw-fixes-series.hook; both ask
+# kernel-series.
 _applesmc_hint() {
     [ "$(cat /sys/class/dmi/id/product_name 2>/dev/null)" = "MacBook9,1" ] || return 0
     [ -e /sys/class/power_supply/BAT0/charge_control_end_threshold ] && return 0
-    _s=$(uname -r | sed -n 's/^\([0-9]*\.[0-9]*\)\..*/\1/p')
-    for _f in /usr/src/macbook91-applesmc-*/"$_s"/applesmc.c; do
-        if [ -n "$_s" ] && [ -e "$_f" ]; then
-            echo ":: macbook91-hw-fixes: the charge limit (applesmc with SMC key BCLM) takes effect after a reboot"
-            echo "   or now with 'sudo modprobe -r applesmc && sudo modprobe applesmc'."
-            return 0
-        fi
-    done
-    echo ":: macbook91-hw-fixes: no applesmc source for Linux ${_s:-?}; on this kernel the charge limit"
-    echo "   cannot be changed (a limit set earlier may still apply). Kernels with a source: see README."
+    /usr/lib/macbook91-hw-fixes/kernel-series --applesmc "$(uname -r)" >/dev/null 2>&1 || return 0
+    echo ":: macbook91-hw-fixes: the charge limit (applesmc with SMC key BCLM) takes effect after a reboot"
+    echo "   or now with 'sudo modprobe -r applesmc && sudo modprobe applesmc'."
 }
 
 post_install() {
@@ -60,9 +55,9 @@ pre_remove() {
             echo ":: macbook91-hw-fixes: could not reset the charge limit to 100 %; it stays at $(cat "$_t" 2>/dev/null) %"
         fi
     elif [ ! -e "$_t" ] && [ "$(cat /sys/class/dmi/id/product_name 2>/dev/null)" = "MacBook9,1" ]; then
-        echo ":: macbook91-hw-fixes: this kernel runs in-tree applesmc, so the charge limit was not reset."
-        echo "   If one below 100 % was set, the SMC may keep it: reinstall the package, boot a kernel it"
-        echo "   has a source for, run 'echo 100 | sudo tee $_t', then remove the package."
+        echo ":: macbook91-hw-fixes: the package's charge limit is not loaded on this kernel, so it was not reset."
+        echo "   If one below 100 % was set, the SMC may keep it: reinstall the package, boot the LTS kernel"
+        echo "   (linux-cachyos-lts), run 'echo 100 | sudo tee $_t', then remove the package."
     fi
     echo ":: macbook91-hw-fixes: without the package the NVMe udev rule is gone; from the next boot"
     echo "   the NVMe root port may enter D3 during suspend again."

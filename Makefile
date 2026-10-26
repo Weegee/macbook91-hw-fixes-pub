@@ -31,10 +31,14 @@ check:
 install:
 	install -Dm755 src/macbook91-hw-verify "$(DESTDIR)$(PREFIX)/bin/macbook91-hw-verify"
 	install -Dm755 src/macbook91-hw-migrate "$(DESTDIR)$(PREFIX)/bin/macbook91-hw-migrate"
+	install -Dm755 src/kernel-series "$(DESTDIR)$(PREFIX)/lib/$(NAME)/kernel-series"
+	sed -i 's/@PKGVER@/$(VERSION)/' "$(DESTDIR)$(PREFIX)/lib/$(NAME)/kernel-series"
+	install -Dm644 src/macbook91-hw-fixes-series.hook "$(DESTDIR)$(PREFIX)/share/libalpm/hooks/71-macbook91-hw-fixes-series.hook"
 	install -Dm755 sleep/macbook91-lid-wake "$(DESTDIR)$(PREFIX)/lib/systemd/system-sleep/macbook91-lid-wake"
 	install -Dm644 udev/60-macbook91-nvme-d3cold.rules "$(DESTDIR)$(PREFIX)/lib/udev/rules.d/60-macbook91-nvme-d3cold.rules"
 	install -Dm644 kernel/macbook91_backlight.c "$(DESTDIR)$(PREFIX)/src/macbook91-backlight-$(VERSION)/macbook91_backlight.c"
 	install -Dm644 kernel/Makefile "$(DESTDIR)$(PREFIX)/src/macbook91-backlight-$(VERSION)/Makefile"
+	install -Dm644 kernel/TESTED-SERIES "$(DESTDIR)$(PREFIX)/src/macbook91-backlight-$(VERSION)/TESTED-SERIES"
 	sed 's/@PKGVER@/$(VERSION)/' kernel/dkms.conf >kernel/dkms.conf.out
 	install -Dm644 kernel/dkms.conf.out "$(DESTDIR)$(PREFIX)/src/macbook91-backlight-$(VERSION)/dkms.conf"
 	rm -f kernel/dkms.conf.out

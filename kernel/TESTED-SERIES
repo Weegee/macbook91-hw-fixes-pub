@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Kernel series on which macbook91_backlight was checked on the hardware
+# (docs/test-status.json), one per line. The module builds for every kernel;
+# on a series not listed here kernel-series --hook prints a note. Add a series
+# after a successful check on it (next release).
+6.18
+7.2

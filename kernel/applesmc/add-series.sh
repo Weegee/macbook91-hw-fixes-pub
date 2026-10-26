@@ -8,9 +8,13 @@
 #
 #   kernel/applesmc/add-series.sh v7.3.1
 #
-# Afterwards by hand: git add upstream/<series>/applesmc.c, name the series in
-# README.md (Charge limit), run make check, and build it with DKMS for a kernel
-# of that series before a release.
+# Before: check that the distribution kernel of that series builds applesmc
+# itself (CONFIG_SENSORS_APPLESMC=m) and ships no other driver for the SMC,
+# such as macsmc-acpi in CachyOS 7.3: two drivers would drive the SMC ports at
+# the same time (docs/FINDINGS.md). Afterwards by hand: git add
+# upstream/<series>/applesmc.c, run make check, and build it with DKMS for a
+# kernel of that series before a release. The README names no series; the
+# pacman hook reports the list from the installed tree.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 PATCH=$HERE/0001-applesmc-charge-limit-through-BCLM.patch

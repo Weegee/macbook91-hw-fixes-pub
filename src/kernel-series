@@ -1,0 +1,154 @@
+#!/usr/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# kernel-series - which Linux kernel series the two DKMS modules of
+# macbook91-hw-fixes cover, and what that means on any other.
+#
+# macbook91-applesmc (the charge limit) is built only for a series with a
+# patched source: one <series>/applesmc.c in its installed DKMS tree, the
+# same list as its dkms.conf BUILD_EXCLUSIVE_KERNEL (the tests check that),
+# taken from kernel/applesmc/UPSTREAM.lock. macbook91_backlight builds for
+# every kernel; TESTED-SERIES in its DKMS tree lists the series it was checked
+# on. The pacman hook calls --hook, the install scriptlet and
+# macbook91-hw-verify call --applesmc and --backlight, so what DKMS builds,
+# what the hook reports and what the verifier says cannot disagree.
+#
+# A kernel belongs to series X.Y when its release starts with "X.Y.", which is
+# what BUILD_EXCLUSIVE_KERNEL="^(X\.Y|...)\." tests.
+#
+#   kernel-series --applesmc RELEASE    exit 0 if RELEASE is of a series with a
+#                                       patched source, 1 if not; the reason on
+#                                       stdout either way
+#   kernel-series --backlight RELEASE   exit 0 if RELEASE is of a tested series,
+#                                       1 if not; a sentence on stdout either way
+#   kernel-series --hook                for every installed kernel: a WARNING
+#                                       block when applesmc has no source for
+#                                       its series, a note when the backlight
+#                                       is not tested on it (the pacman hook)
+#
+#   --src-root DIR       where the DKMS trees are (default /usr/src)
+#   --modules-root DIR   where the kernels are (default /usr/lib/modules)
+#
+# Exit 2: bad arguments, or no installed DKMS tree of this version.
+set -u
+
+PKGVER=@PKGVER@
+SRC_ROOT=/usr/src
+MODULES_ROOT=/usr/lib/modules
+MODE=''
+REL=''
+
+die() { printf 'kernel-series: %s\n' "$*" >&2; exit 2; }
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--hook) MODE=hook; shift ;;
+	--applesmc | --backlight)
+		[ $# -ge 2 ] || die "$1 needs a kernel release"
+		MODE=${1#--}; REL=$2; shift 2 ;;
+	--src-root)
+		[ $# -ge 2 ] || die "--src-root needs a directory"
+		SRC_ROOT=$2; shift 2 ;;
+	--modules-root)
+		[ $# -ge 2 ] || die "--modules-root needs a directory"
+		MODULES_ROOT=$2; shift 2 ;;
+	*) die "unknown argument: $1" ;;
+	esac
+done
+[ -n "$MODE" ] || die "no mode: use --applesmc RELEASE, --backlight RELEASE or --hook"
+
+SMC_TREE=$SRC_ROOT/macbook91-applesmc-$PKGVER
+BL_LIST=$SRC_ROOT/macbook91-backlight-$PKGVER/TESTED-SERIES
+[ -d "$SMC_TREE" ] || die "no installed applesmc source tree, $SMC_TREE"
+[ -r "$BL_LIST" ] || die "cannot read the list of tested backlight series, $BL_LIST"
+
+SMC_SERIES=()
+for f in "$SMC_TREE"/*/applesmc.c; do
+	[ -e "$f" ] && SMC_SERIES+=("$(basename "$(dirname "$f")")")
+done
+BL_SERIES=()
+while read -r s _; do
+	case $s in '' | '#'*) continue ;; esac
+	[[ $s =~ ^[0-9]+\.[0-9]+$ ]] || die "malformed series '$s' in $BL_LIST"
+	BL_SERIES+=("$s")
+done <"$BL_LIST"
+
+series_of() { # RELEASE -> its X.Y, or nothing
+	[[ $1 =~ ^([0-9]+\.[0-9]+)\. ]] && printf '%s' "${BASH_REMATCH[1]}"
+}
+
+in_list() { # SERIES LIST... -> exit 0 when SERIES is in LIST
+	local s=$1 x
+	shift
+	for x in "$@"; do [ "$x" = "$s" ] && return 0; done
+	return 1
+}
+
+own_smc() { # RELEASE -> the kernel's own Apple SMC driver, as it ships it
+	local d=$MODULES_ROOT/$1 m
+	for m in macsmc-acpi applesmc; do
+		if [ -n "$(find "$d/kernel" -name "$m.ko*" -print -quit 2>/dev/null)" ] ||
+			grep -qE "/$m\.ko\$" "$d/modules.builtin" 2>/dev/null; then
+			printf '%s' "$m"
+			return 0
+		fi
+	done
+	return 1
+}
+
+smc_unsupported() { # RELEASE -> the explanation, the same for hook and verifier
+	local ks drv
+	ks=$(series_of "$1")
+	printf 'kernel %s (Linux %s) is not a series macbook91-applesmc has a source for (%s),\n' \
+		"$1" "${ks:-of unknown series}" "${SMC_SERIES[*]:-none}"
+	printf 'so the charge limit of this package is not built for it.\n'
+	if drv=$(own_smc "$1"); then
+		case $drv in
+		macsmc-acpi)
+			printf 'This kernel brings its own Apple SMC driver, macsmc-acpi, in place of applesmc;\n'
+			printf 'its macsmc-power may offer a charge limit of its own (not checked by this package).\n' ;;
+		applesmc) printf 'This kernel runs its own applesmc, which has no charge limit.\n' ;;
+		esac
+	else
+		printf 'This kernel has no Apple SMC driver (neither applesmc nor macsmc-acpi).\n'
+	fi
+	printf 'A limit set earlier presumably stays in the SMC. To read or change it with this\n'
+	printf 'package, boot the LTS kernel (linux-cachyos-lts).\n'
+}
+
+bl_untested() { # RELEASE -> one line
+	printf 'macbook91_backlight is built for kernel %s but not tested on Linux %s (tested: %s); if the brightness misbehaves, boot the LTS kernel (linux-cachyos-lts)\n' \
+		"$1" "$(series_of "$1")" "${BL_SERIES[*]}"
+}
+
+case "$MODE" in
+applesmc)
+	if in_list "$(series_of "$REL")" "${SMC_SERIES[@]}"; then
+		printf 'kernel %s is of Linux %s, a series macbook91-applesmc has a source for (%s)\n' \
+			"$REL" "$(series_of "$REL")" "${SMC_SERIES[*]}"
+		exit 0
+	fi
+	smc_unsupported "$REL"
+	exit 1
+	;;
+backlight)
+	if in_list "$(series_of "$REL")" "${BL_SERIES[@]}"; then
+		printf 'macbook91_backlight is tested on Linux %s (tested: %s)\n' "$(series_of "$REL")" "${BL_SERIES[*]}"
+		exit 0
+	fi
+	bl_untested "$REL"
+	exit 1
+	;;
+hook)
+	for d in "$MODULES_ROOT"/*/; do
+		[ -e "$d/vmlinuz" ] || continue
+		rel=$(basename "$d")
+		if ! in_list "$(series_of "$rel")" "${SMC_SERIES[@]}"; then
+			printf '\n==> WARNING: macbook91-hw-fixes ================================\n'
+			smc_unsupported "$rel" | sed 's/^/    /'
+			printf '==================================================================\n\n'
+		fi
+		in_list "$(series_of "$rel")" "${BL_SERIES[@]}" || printf ':: macbook91-hw-fixes: %s\n' "$(bl_untested "$rel")"
+	done
+	;;
+esac
+exit 0

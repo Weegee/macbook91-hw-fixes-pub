@@ -20,7 +20,7 @@ sha() { sha256sum "$1" | cut -d' ' -f1; }
 
 # --- repository hygiene
 cd "$REPO" || exit 1
-check "shellcheck clean" 'shellcheck -S warning packaging/promote-release.sh src/macbook91-hw-migrate src/macbook91-hw-verify sleep/macbook91-lid-wake tests/run-tests.sh tools/*.sh kernel/applesmc/add-series.sh >/dev/null'
+check "shellcheck clean" 'shellcheck -S warning packaging/promote-release.sh src/macbook91-hw-migrate src/macbook91-hw-verify src/kernel-series sleep/macbook91-lid-wake tests/run-tests.sh tools/*.sh kernel/applesmc/add-series.sh >/dev/null'
 check "VERSION is YYYYMMDD.NN" 'grep -qxE "[0-9]{8}\.[0-9]{2}" VERSION'
 check "PKGBUILD pkgver equals VERSION" '[ "$(sed -n "s/^pkgver=//p" packaging/arch/PKGBUILD)" = "$(cat VERSION)" ]'
 check ".SRCINFO pkgver equals VERSION" 'grep -qx "	pkgver = $(cat VERSION)" packaging/arch/.SRCINFO'
@@ -34,7 +34,7 @@ lic=$(sed -n 's/^license=(\(.*\))$/\1/p' packaging/arch/PKGBUILD | tr -d "'" | t
 check "license: every packaged source names its license (SPDX line)" '[ -z "$(git grep -L SPDX-License-Identifier -- src sleep udev kernel Makefile ":!*.patch")" ]'
 check "license: PKGBUILD and .SRCINFO list exactly the packaged SPDX IDs" '[ -n "$spdx" ] && [ "$spdx" = "$lic" ] && [ "$(sed -n "s/^\tlicense = //p" packaging/arch/.SRCINFO | sort -u)" = "$lic" ]'
 check "license: GPL-3.0 in LICENSE and LICENSES/ (identical), every SPDX ID has a text in LICENSES/ and the tarball" 'grep -q "^Version 3, 29 June 2007" LICENSE && cmp -s LICENSE LICENSES/GPL-3.0-or-later.txt && (for id in $spdx; do { [ -s "LICENSES/$id.txt" ] && grep -qF "\"LICENSES/$id.txt\"" packaging/mkdist.py; } || exit 1; done)'
-check "license: module sources and build files GPLv2-compatible, pwm_bl.c credited" '[ "$(git grep -l "SPDX-License-Identifier: GPL-3" -- kernel)" = "$(printf "%s\n" kernel/applesmc/UPSTREAM.lock kernel/applesmc/add-series.sh)" ] && head -1 kernel/macbook91_backlight.c | grep -qx "// SPDX-License-Identifier: GPL-2.0-only" && grep -q "follows cie1931() in drivers/video/backlight/pwm_bl.c" kernel/macbook91_backlight.c'
+check "license: module sources and build files GPLv2-compatible, pwm_bl.c credited" '[ "$(git grep -l "SPDX-License-Identifier: GPL-3" -- kernel)" = "$(printf "%s\n" kernel/TESTED-SERIES kernel/applesmc/UPSTREAM.lock kernel/applesmc/add-series.sh)" ] && head -1 kernel/macbook91_backlight.c | grep -qx "// SPDX-License-Identifier: GPL-2.0-only" && grep -q "follows cie1931() in drivers/video/backlight/pwm_bl.c" kernel/macbook91_backlight.c'
 
 # --- applesmc replacement: pinned upstream copies, one patch for every series
 AS=$REPO/kernel/applesmc
@@ -46,6 +46,32 @@ mkdir -p "$T/asx" && cp -r "$AS"/add-series.sh "$AS"/0001-applesmc-charge-limit-
 MACBOOK91_APPLESMC_SRC="$AS/upstream/7.2/applesmc.c" "$T/asx/add-series.sh" v9.9.1 >/dev/null 2>&1; rc=$?
 check "add-series: pins a new series in UPSTREAM.lock and dkms.conf" '[ $rc = 0 ] && (cd "$T/asx" && grep -v "^#" UPSTREAM.lock | awk "{print \$3\"  \"\$4}" | sha256sum --quiet -c) && grep -q "^9\.9 v9\.9\.1 " "$T/asx/UPSTREAM.lock" && grep -qxF "BUILD_EXCLUSIVE_KERNEL=\"^(6\\.18|7\\.2|9\\.9)\\.\"" "$T/asx/dkms.conf"'
 check "add-series: refuses a series that is already pinned" '! MACBOOK91_APPLESMC_SRC="$AS/upstream/7.2/applesmc.c" "$T/asx/add-series.sh" v7.2.10 >/dev/null 2>&1'
+check "applesmc: dkms.conf BUILD_EXCLUSIVE_KERNEL lists exactly the upstream series" '[ "$(sed -n "s/^BUILD_EXCLUSIVE_KERNEL=\"^(\(.*\))\\\\.\"$/\1/p" "$AS/dkms.conf")" = "$(cd "$AS/upstream" && ls -d */ | tr -d / | sed "s/\./\\\\./g" | paste -sd"|")" ]'
+check "backlight: TESTED-SERIES lists well-formed series" '[ -n "$(grep -vE "^(#|$)" kernel/TESTED-SERIES)" ] && ! grep -vE "^(#.*|[0-9]+\.[0-9]+)?$" kernel/TESTED-SERIES | grep -q .'
+
+# --- kernel-series: the one answer for the pacman hook, the scriptlet and the verifier
+KSX=$T/kernel-series
+sed 's/@PKGVER@/1/' src/kernel-series >"$KSX"; chmod +x "$KSX"
+KR=$T/ks
+mkdir -p "$KR"/src/macbook91-applesmc-1/6.18 "$KR"/src/macbook91-applesmc-1/7.2 "$KR"/src/macbook91-backlight-1
+: >"$KR"/src/macbook91-applesmc-1/6.18/applesmc.c; : >"$KR"/src/macbook91-applesmc-1/7.2/applesmc.c
+cp kernel/TESTED-SERIES "$KR"/src/macbook91-backlight-1/
+for k in 6.18.55-2-cachyos-lts 7.3.0-4-cachyos 7.4.0-1-cachyos; do mkdir -p "$KR/modules/$k"; : >"$KR/modules/$k/vmlinuz"; done
+mkdir -p "$KR"/modules/7.3.0-4-cachyos/kernel/drivers/platform/x86 "$KR"/modules/headers-only
+: >"$KR"/modules/7.3.0-4-cachyos/kernel/drivers/platform/x86/macsmc-acpi.ko.zst
+ksx() { "$KSX" --src-root "$KR/src" --modules-root "$KR/modules" "$@"; }
+check "kernel-series: a series with a source is supported" 'ksx --applesmc 6.18.55-2-cachyos-lts >/dev/null'
+check "kernel-series: another series is not, and its own SMC driver is named" 'o=$(ksx --applesmc 7.3.0-4-cachyos); [ $? = 1 ] && grep -q "(Linux 7.3) is not a series macbook91-applesmc has a source for (6.18 7.2)" <<<"$o" && grep -q "own Apple SMC driver, macsmc-acpi" <<<"$o"'
+check "kernel-series: a kernel without any SMC driver says so" 'ksx --applesmc 7.4.0-1-cachyos | grep -q "has no Apple SMC driver"'
+check "kernel-series: the backlight is tested on the listed series only" 'ksx --backlight 7.2.11-1-cachyos >/dev/null && ! ksx --backlight 7.3.0-4-cachyos >/dev/null'
+out=$(ksx --hook); rc=$?
+check "kernel-series --hook: a WARNING block for each kernel without an applesmc source, none for a covered one" '[ $rc = 0 ] && [ "$(grep -c "^==> WARNING: macbook91-hw-fixes" <<<"$out")" = 2 ] && grep -q "kernel 7.3.0-4-cachyos (Linux 7.3)" <<<"$out" && grep -q "kernel 7.4.0-1-cachyos (Linux 7.4)" <<<"$out" && ! grep -q "6.18.55" <<<"$out"'
+check "kernel-series --hook: one note line per kernel with an untested backlight series" '[ "$(grep -c "^:: macbook91-hw-fixes: macbook91_backlight is built for kernel" <<<"$out")" = 2 ]'
+check "kernel-series --hook: a directory without vmlinuz is no kernel" '! grep -q headers-only <<<"$out"'
+check "kernel-series --hook: nothing to report, no output" 'rm -r "$KR/modules/7.3.0-4-cachyos" "$KR/modules/7.4.0-1-cachyos"; [ -z "$(ksx --hook)" ]'
+check "kernel-series: missing tree and bad arguments exit 2" '"$KSX" --src-root "$T/none" --hook >/dev/null 2>&1; [ $? = 2 ] && { ksx --frob >/dev/null 2>&1; [ $? = 2 ]; } && { ksx >/dev/null 2>&1; [ $? = 2 ]; }'
+H=src/macbook91-hw-fixes-series.hook
+check "hook: runs the installed kernel-series after the transaction, on kernels and on this package" 'grep -qx "Exec = /usr/lib/macbook91-hw-fixes/kernel-series --hook" $H && grep -qx "When = PostTransaction" $H && grep -qx "Target = usr/lib/modules/\*/vmlinuz" $H && grep -qx "Target = usr/src/macbook91-applesmc-\*/dkms.conf" $H && grep -q "/lib/\$(NAME)/kernel-series\"" Makefile && grep -q "hooks/71-macbook91-hw-fixes-series.hook\"" Makefile && [[ 71-macbook91-hw-fixes-series.hook > 70-dkms-install.hook ]]'
 
 # --- fake MacBook9,1 system
 mkroot() {
@@ -224,10 +250,13 @@ vroot() {
 	echo 0 >"$R"/sys/power/suspend_stats/fail
 	printf 'LID0\t  S4\t*enabled   platform:PNP0C0D:00\nSPIT\t  S3\t*enabled   spi:spi-APP000D:00\n' >"$R"/proc/acpi/wakeup
 	ser=$(uname -r | sed -nE 's/^([0-9]+\.[0-9]+)\..*/\1/p')
-	mkdir -p "$R/usr/src/macbook91-applesmc-1/$ser"; : >"$R/usr/src/macbook91-applesmc-1/$ser/applesmc.c"
+	mkdir -p "$R/usr/src/macbook91-applesmc-1/$ser" "$R/usr/src/macbook91-backlight-1" "$R/proc/sys/kernel"
+	: >"$R/usr/src/macbook91-applesmc-1/$ser/applesmc.c"
+	printf '%s\n' "$ser" >"$R/usr/src/macbook91-backlight-1/TESTED-SERIES"
+	uname -r >"$R/proc/sys/kernel/osrelease"
 	echo "quiet ${3:-}" >"$R"/proc/cmdline
 }
-ver() { PATH=$T/bin:$PATH MACBOOK91_SYSROOT=$R MACBOOK91_MIGRATE="$T/mig" "$VER" "$@"; }
+ver() { PATH=$T/bin:$PATH MACBOOK91_SYSROOT=$R MACBOOK91_MIGRATE="$T/mig" MACBOOK91_KERNEL_SERIES=$KSX "$VER" "$@"; }
 printf '#!/usr/bin/bash\nMACBOOK91_SYSROOT=%s MACBOOK91_REGEN=true %s "$@"\n' "$T/rootv" "$MIG" >"$T/mig"; chmod +x "$T/mig"
 
 vroot intel_backlight 1388 acpi_backlight=native
@@ -251,10 +280,19 @@ check "verify: missing charge limit warns" 'grep -q "^WARN charge limit: BAT0 ha
 mkdir -p "$R/sys/class/power_supply/BAT0"; echo 80 >"$R/sys/class/power_supply/BAT0/charge_control_end_threshold"
 check "verify: charge limit passes" 'ver | grep -q "^PASS charge limit: BAT0 charge_control_end_threshold 80 %"'
 check "verify: missing macbook91-applesmc on a kernel with a source fails" 'DKMS_EXTRA= ver | grep -q "^FAIL dkms: macbook91-applesmc not installed"'
-rm -r "$R/usr/src/macbook91-applesmc-1"
-check "verify: macbook91-applesmc without a source for the kernel warns" 'DKMS_EXTRA= ver | grep -q "^WARN dkms: macbook91-applesmc has no source for Linux"'
+rm -r "$R/usr/src/macbook91-applesmc-1/$ser"
+check "verify: macbook91-applesmc without a source for the kernel warns" 'DKMS_EXTRA= ver | grep -q "^WARN dkms: macbook91-applesmc not built: kernel $(uname -r) (Linux $ser) is not a series"'
 rm -f "$R/sys/class/power_supply/BAT0/charge_control_end_threshold"
-check "verify: charge limit without a source names the kernel" 'ver | grep -q "^WARN charge limit: not available on Linux"'
+check "verify: charge limit without a source names the kernel" 'ver | grep -q "^WARN charge limit: this package.s charge limit is not built for kernel $(uname -r)"'
+# A kernel of a series without a source that brings its own SMC driver (CachyOS 7.3).
+echo 7.3.0-4-cachyos >"$R/proc/sys/kernel/osrelease"
+mkdir -p "$R/usr/lib/modules/7.3.0-4-cachyos/kernel/drivers/platform/x86" "$R/sys/class/power_supply/macsmc-battery"
+: >"$R/usr/lib/modules/7.3.0-4-cachyos/kernel/drivers/platform/x86/macsmc-acpi.ko.zst"
+echo 100 >"$R/sys/class/power_supply/macsmc-battery/charge_control_end_threshold"
+out=$(DKMS_EXTRA='' ver)
+check "verify: a kernel with macsmc-acpi is named, not called in-tree applesmc" 'grep -q "^WARN dkms: macbook91-applesmc not built: kernel 7.3.0-4-cachyos (Linux 7.3) .*own Apple SMC driver, macsmc-acpi" <<<"$out" && ! grep -qi "in-tree" <<<"$out"'
+check "verify: a charge limit of the kernel's own driver is reported, not passed" 'grep -q "^INFO charge limit: macsmc-battery offers charge_control_end_threshold 100 %" <<<"$out" && ! grep -q "^PASS charge limit" <<<"$out"'
+check "verify: an untested backlight series is reported" 'grep -q "^INFO dkms: macbook91_backlight is built for kernel 7.3.0-4-cachyos but not tested on Linux 7.3" <<<"$out"'
 vroot acpi_video0 90
 out=$(ver)
 check "verify: acpi_video0 without parameter warns" 'grep -q "^WARN backlight: acpi_video0 reaches only 90 %" <<<"$out"'
@@ -318,6 +356,8 @@ if [ -n "${PKGDIR_CHECK:-}" ]; then
 	check "package: applesmc DKMS tree with patched sources for every series" '(d=$PKGDIR_CHECK/usr/src/macbook91-applesmc-$(cat VERSION); grep -qx "PACKAGE_VERSION=\"$(cat VERSION)\"" "$d/dkms.conf" && for s in "$AS"/upstream/*/; do grep -q "applesmc_charge_attach" "$d/$(basename "$s")/applesmc.c" || exit 1; done)'
 	check "package: NVMe udev rule installed" '[ -f "$PKGDIR_CHECK/usr/lib/udev/rules.d/60-macbook91-nvme-d3cold.rules" ]'
 	check "package: tools installed executable" '[ -x "$PKGDIR_CHECK/usr/bin/macbook91-hw-verify" ] && [ -x "$PKGDIR_CHECK/usr/bin/macbook91-hw-migrate" ]'
+	check "package: kernel-series of this version, the hook and TESTED-SERIES installed" 'k=$PKGDIR_CHECK/usr/lib/macbook91-hw-fixes/kernel-series; [ -x "$k" ] && grep -qx "PKGVER=$(cat VERSION)" "$k" && [ -f "$PKGDIR_CHECK/usr/share/libalpm/hooks/71-macbook91-hw-fixes-series.hook" ] && cmp -s kernel/TESTED-SERIES "$PKGDIR_CHECK/usr/src/macbook91-backlight-$(cat VERSION)/TESTED-SERIES"'
+	check "package: kernel-series answers from the packaged trees" '(k=$PKGDIR_CHECK/usr/lib/macbook91-hw-fixes/kernel-series; for s in "$AS"/upstream/*/; do "$k" --src-root "$PKGDIR_CHECK/usr/src" --modules-root "$T/none" --applesmc "$(basename "$s").1-test" >/dev/null || exit 1; done; ! "$k" --src-root "$PKGDIR_CHECK/usr/src" --modules-root "$T/none" --applesmc 9.9.1-test >/dev/null)'
 fi
 
 printf '%d passed, %d failed\n' "$pass" "$fail"

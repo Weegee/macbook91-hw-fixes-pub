@@ -48,12 +48,20 @@ for p in macbook91-cs4208-dkms macbook91-facetimehd-dkms macbook91-wireless-dkms
 		INFO "package: $p not installed (optional, a separate package)"
 	fi
 done
-kr=$(uname -r)
-# Kernel series with a patched applesmc source: one directory each in the
-# installed DKMS tree (the same list as its dkms.conf BUILD_EXCLUSIVE_KERNEL).
-series=$(sed -nE 's/^([0-9]+\.[0-9]+)\..*/\1/p' <<<"$kr")
+kr=$(rd /proc/sys/kernel/osrelease)
+[ -n "$kr" ] || kr=$(uname -r)
+# Which series the two modules cover: kernel-series decides it for the pacman
+# hook, the install scriptlet and this tool alike.
+KS=${MACBOOK91_KERNEL_SERIES:-/usr/lib/macbook91-hw-fixes/kernel-series}
+ks() { # MODE RELEASE -> its answer on one line, its exit status
+	local out rc
+	out=$("$KS" --src-root "$ROOT/usr/src" --modules-root "$ROOT/usr/lib/modules" "$@" 2>&1)
+	rc=$?
+	printf '%s\n' "${out//$'\n'/ }"
+	return "$rc"
+}
 smc_src=no
-[ -n "$series" ] && compgen -G "$ROOT/usr/src/macbook91-applesmc-*/$series/applesmc.c" >/dev/null && smc_src=yes
+smc_why=$(ks --applesmc "$kr") && smc_src=yes
 if command -v dkms >/dev/null; then
 	st=$(dkms status -k "$kr" 2>/dev/null)
 	for m in $drivers macbook91-backlight; do
@@ -69,8 +77,9 @@ if command -v dkms >/dev/null; then
 	elif [ "$smc_src" = yes ]; then
 		FAIL "dkms: macbook91-applesmc not installed for the running kernel $kr"
 	else
-		WARN "dkms: macbook91-applesmc has no source for Linux ${series:-$kr}; in-tree applesmc runs, the charge limit cannot be changed (a limit set earlier may still apply)"
+		WARN "dkms: macbook91-applesmc not built: $smc_why"
 	fi
+	bl_why=$(ks --backlight "$kr") || INFO "dkms: $bl_why"
 fi
 
 # --- charge limit (SMC key BCLM through macbook91-applesmc)
@@ -80,7 +89,14 @@ if [[ $thr =~ ^[0-9]+$ ]]; then
 elif [ "$smc_src" = yes ]; then
 	WARN "charge limit: BAT0 has no charge_control_end_threshold (reboot, or: sudo modprobe -r applesmc && sudo modprobe applesmc)"
 else
-	WARN "charge limit: not available on Linux ${series:-$kr} (in-tree applesmc); a limit set earlier may still apply, boot a kernel the package has a source for to change it"
+	other=""
+	for f in "$ROOT"/sys/class/power_supply/*/charge_control_end_threshold; do
+		[ -e "$f" ] && other=$(basename "$(dirname "$f")") && break
+	done
+	if [ -n "$other" ]; then
+		INFO "charge limit: $other offers charge_control_end_threshold $(rd "/sys/class/power_supply/$other/charge_control_end_threshold") % from the kernel's own SMC driver, not from this package (not checked)"
+	fi
+	WARN "charge limit: this package's charge limit is not built for kernel $kr; a limit set earlier presumably stays in the SMC; boot the LTS kernel (linux-cachyos-lts) to read or change it"
 fi
 
 # --- migration steps
