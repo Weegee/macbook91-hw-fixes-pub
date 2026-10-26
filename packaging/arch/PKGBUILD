@@ -27,7 +27,7 @@ makedepends=('make' 'patch')
 # checksum is pinned at release time; `make arch-pkg` refuses a tarball that
 # does not match it.
 source=("$pkgbase-$pkgver.tar")
-sha256sums=('5e7e737057b575ec9e588061d866a152379b96d3957db6d8490721f02e08184c')
+sha256sums=('7c3716678670958fe1430d162cbb00e42dbb8555462d3a0fa04f5ffd8b00d3c4')
 
 # Dependencies sit in package_*() as in the driver packages: makepkg does not
 # check them at build time, so a build host without the CachyOS repositories

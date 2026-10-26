@@ -10,7 +10,7 @@ pkgbase = macbook91-hw-fixes
 	makedepends = make
 	makedepends = patch
 	source = macbook91-hw-fixes-20261026.02.tar
-	sha256sums = 5e7e737057b575ec9e588061d866a152379b96d3957db6d8490721f02e08184c
+	sha256sums = 7c3716678670958fe1430d162cbb00e42dbb8555462d3a0fa04f5ffd8b00d3c4
 
 pkgname = macbook91-hw-fixes
 	install = macbook91-hw-fixes.install
