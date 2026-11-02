@@ -6,6 +6,47 @@ measured, the package checksum) is `release/<version>/STATUS.txt`; the
 release tool keeps at most the two newest releases in the tree, older releases
 are not part of this repository.
 
+## 20261102.01
+
+**Exit statuses, log levels and message layout of the text interfaces follow
+the house HIG (text part), which replaces the separate text HIG; the rule IDs
+are the same. The modules, the hook file, the udev rule and the migration
+steps are unchanged.**
+
+Interface changes (STA-4); what scripts parse stays as it was:
+
+- `macbook91-hw-migrate apply ID...`: a step that is named and cannot be
+  applied because it is `foreign` or `unsupported` now ends with exit status 1
+  and `macbook91-hw-migrate: error: step ID not applied: ...` on stderr, with
+  the line `Check the state:  macbook91-hw-migrate status`. It used to print
+  `skip ID: ...` on stdout and exit 0 (KAN-2). `apply` without names still
+  only skips such a default step and exits 0; a step that is already `applied`
+  or `done` is still a success.
+- A missing root is exit status 1, not the usage error 2 (KAN-3), for
+  `apply` and `rollback` of `macbook91-hw-migrate` and for
+  `tools/dev-backlight-check.sh` and `tools/dev-suspend-series.sh` (these two
+  also exit 1 for a missing `intel_backlight`, a missing default route and an
+  empty `SUDO_USER`). Exit status 2 now means a usage error only; the help
+  texts say so.
+- `macbook91-hw-migrate rollback ID` for a step that is not applied prints
+  `nothing to roll back: ID` and exits 0; `rollback` without names prints
+  `nothing to roll back` when nothing was applied. It was silent (ERF-2).
+- `kernel-series`: a missing DKMS tree or a malformed series list is exit
+  status 1 (it was 2), and with `--hook` exit status 0 with the error on
+  stderr, as the help always said: a failing PostTransaction hook makes pacman print
+  an error after an otherwise good transaction. Abweichung von KAN-2 und FEH-6: `--hook` exits 0
+  even when it could not do its job, because it only advises.
+- `sleep/macbook91-lid-wake`: "could not switch LID0 wake on" is logged with
+  priority `user.warning` (it was `user.info`). The `pre` branch now reads the
+  wake state back like `post` does and logs `user.warning` when the write did
+  not take effect, instead of reporting a switch that did not happen
+  (ERF-2, LOG-3).
+- Install scriptlet: the next-steps lines are wrapped at 80 columns (TYP-2);
+  the commands are on lines of their own and can be copied as before.
+- Tests: one check per change above, each of them fails against the old code;
+  the verify check for an untested backlight series no longer depends on the
+  series of the running kernel (it failed on 7.3).
+
 ## 20261026.02
 
 **Text interfaces follow the house text guidelines (HIG): help, version, error
