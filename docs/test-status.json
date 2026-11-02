@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-26T22:40+01:00",
+  "updated": "2026-11-02T13:40+01:00",
   "kernel": "6.18.55-2-cachyos-lts",
   "runs": [
     {
@@ -481,6 +481,21 @@
       "test": "release 20261026.02 hardware gate: pacman -U, DKMS builds, hook output in a real transaction, reboot, macbook91-hw-verify from the installed package",
       "result": "NOT_RUN",
       "detail": "needs the owner (sudo password, reboot); the release is not conditional on it, as for 20261026.01. The hook text change is covered by the hermetic tests only."
+    },
+    {
+      "test": "release 20261102.01 (exit statuses, log levels): tests/run-tests.sh (hermetic, kernel module builds skipped with SKIP_KBUILD, offline), with package contents of the built package, make dist twice (identical), make arch-pkg, namcap, ShellCheck, bash -n, git diff --check",
+      "result": "PASS",
+      "detail": "2026-11-02 on nova (not a MacBook): 172 passed, 0 failed; 180 passed, 0 failed with the package contents; before the changes 160 passed, 1 failed (the verify check for an untested backlight series assumed a running kernel other than 7.3, now independent of it). Each new check fails against the old code (11 failures with the old src, sleep, tools and scriptlet). make dist is reproducible (sha256 28ace20f…); namcap reports only 'dependency may not be needed' warnings; the local gate: private tests 23 passed, 0 failed, export guard 0 hits."
+    },
+    {
+      "test": "release 20261102.01 kernel module build checks of the suite (macbook91_backlight, applesmc against the running kernel's headers)",
+      "result": "NOT_RUN",
+      "detail": "skipped with SKIP_KBUILD on nova; the module sources and Makefiles are byte-identical to 20261026.02 (diff -r of the two source tarballs)."
+    },
+    {
+      "test": "release 20261102.01 lid hook on the real /proc/acpi/wakeup, macbook91-hw-migrate apply and rollback as root on the real system, dev tools' measuring runs, hardware gate (pacman -U, DKMS builds, hook output in a real transaction, reboot, macbook91-hw-verify from the installed package)",
+      "result": "NOT_RUN",
+      "detail": "needs a MacBook9,1, root or a suspend and the owner; the release is not conditional on it, as for 20261026.02. The changes are covered by the hermetic tests with fake roots and stub commands only."
     }
   ]
 }
