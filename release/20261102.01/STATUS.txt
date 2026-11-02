@@ -1,0 +1,50 @@
+macbook91-hw-fixes 20261102.01-1 - RELEASE (tag v20261102.01, prepared 2026-11-02; the hardware gate is NOT_RUN and stays open)
+
+What: exit statuses, log levels and message layout of the text interfaces
+follow the house guidelines (HIG, text part). The modules, the hook file, the
+udev rule, the migration steps and the output lines that scripts parse are
+unchanged.
+- macbook91-hw-migrate apply ID...: a named step that is foreign or
+  unsupported ends with exit 1 and an error line (KAN-2); it used to report
+  "skip" and exit 0. apply without names still only skips such a default step.
+  A missing root is exit 1, not 2 (KAN-3), also in the two dev tools.
+  rollback of a step that is not applied says "nothing to roll back" (ERF-2).
+- kernel-series: a missing DKMS tree is exit 1, with --hook exit 0 and the
+  error on stderr (the help always said --hook exits 0). Deviation kept and
+  named in the code: Abweichung von KAN-2 und FEH-6.
+- sleep/macbook91-lid-wake: a failed switch is logged with user.warning
+  (LOG-3); the pre branch reads the wake state back like post does (ERF-2).
+- Install scriptlet: next-steps lines wrapped at 80 columns (TYP-2).
+- Details: docs/CHANGELOG.md.
+
+Source tarball against that of 20261026.02: changed are VERSION,
+sleep/macbook91-lid-wake, src/kernel-series, src/macbook91-hw-migrate and the
+comment of src/macbook91-hw-verify; the module sources, their Makefiles, the
+applesmc patch and upstream copies, UPSTREAM.lock, the udev rule, the pacman
+hook file, README and docs are byte-identical (diff -r of the two extracted
+tarballs).
+
+Measured without hardware (2026-11-02, nova, not a MacBook):
+- make dist: built twice from the committed tree, identical, sha256
+  28ace20f6423b7092d27dc079cb3e65ce13631d9ad143f3528f4e7cd8f8d2004, the one
+  pinned in PKGBUILD; make arch-pkg builds the package from it; .SRCINFO
+  current (promote-release.sh checks it).
+- tests/run-tests.sh with the kernel module builds skipped (SKIP_KBUILD=1),
+  offline: 172 passed, 0 failed; 180 passed, 0 failed with the package-content
+  checks on the extracted package. Before the changes: 160 passed, 1 failed
+  (the verify check for an untested backlight series assumed a running kernel
+  of another series than 7.3; fixed). Each new check fails against the old
+  code.
+- namcap: seven dependency warnings for the package (listed by design), 0
+  errors. ShellCheck at warning level, bash -n and git diff --check clean.
+- Local gate of promote-release.sh: the private test script 23 passed, 0
+  failed, 0 blocked; the export guard 0 hits.
+
+NOT_RUN: the two kernel module build checks of the suite (SKIP_KBUILD), the
+hardware gate (pacman -U and the hook and scriptlet output in that
+transaction, DKMS builds, a reboot, the installed macbook91-hw-verify), the
+lid hook on the real /proc/acpi/wakeup and a real suspend, macbook91-hw-migrate
+as root on the real system, the dev tools' measuring runs.
+
+Built package (not tracked; local build, makepkg output differs per machine):
+717239bc58e1749d295009d437ebf344d9862f4e5e387fb723633dc442d5aefa  macbook91-hw-fixes-20261102.01-1-any.pkg.tar.zst
