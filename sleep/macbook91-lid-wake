@@ -19,7 +19,14 @@ LID=$ROOT/proc/acpi/button/lid/LID0/state
 
 [ "$(cat "$ROOT/sys/class/dmi/id/product_name" 2>/dev/null)" = "MacBook9,1" ] || exit 0
 
-log() { if [ -n "$ROOT" ]; then echo "$*" >>"$ROOT/lid-wake.log"; else logger -t macbook91-lid-wake -p user.info "$*"; fi; }
+# log [-p PRIORITY] MESSAGE: journal priority user.info, or user.warning for a
+# state that is not what the hook meant to set (LOG-3). Under a fake root the
+# line goes to a file, prefixed with the priority.
+log() {
+	local prio=info
+	if [ "${1:-}" = -p ]; then prio=$2; shift 2; fi
+	if [ -n "$ROOT" ]; then echo "$prio: $*" >>"$ROOT/lid-wake.log"; else logger -t macbook91-lid-wake -p "user.$prio" "$*"; fi
+}
 enabled() { grep -qE '^LID0[[:space:]].*\*enabled' "$WAKEUP"; }
 set_lid0() { # set_lid0 on|off
 	if [ "$1" = on ]; then enabled || echo LID0 >"$WAKEUP"; else ! enabled || echo LID0 >"$WAKEUP"; fi
@@ -27,15 +34,25 @@ set_lid0() { # set_lid0 on|off
 
 case ${1:-} in
 pre)
+	# The result is read back each time: a write to /proc/acpi/wakeup toggles
+	# and can fail, and the log must not claim a state the machine is not in.
 	if grep -q 'open' "$LID" 2>/dev/null; then
 		set_lid0 off
-		log "pre ${2:-}: lid open, LID0 wake off (power button wakes)"
+		if enabled; then
+			log -p warning "pre ${2:-}: lid open, but could not switch LID0 wake off (the machine may wake again at once)"
+		else
+			log "pre ${2:-}: lid open, LID0 wake off (power button wakes)"
+		fi
 	else
 		set_lid0 on
-		log "pre ${2:-}: lid closed or unknown, LID0 wake on (opening wakes)"
+		if enabled; then
+			log "pre ${2:-}: lid closed or unknown, LID0 wake on (opening wakes)"
+		else
+			log -p warning "pre ${2:-}: lid closed or unknown, but could not switch LID0 wake on (opening may not wake)"
+		fi
 	fi ;;
 post)
 	set_lid0 on
-	if enabled; then log "post ${2:-}: LID0 wake on"; else log "post ${2:-}: could not switch LID0 wake on"; fi ;;
+	if enabled; then log "post ${2:-}: LID0 wake on"; else log -p warning "post ${2:-}: could not switch LID0 wake on"; fi ;;
 esac
 exit 0

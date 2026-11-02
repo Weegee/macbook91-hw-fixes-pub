@@ -11,7 +11,7 @@
 #   macbook91-hw-migrate rollback [ID...]  undo applied steps, newest first (root)
 #
 # Abweichung von ARG-4 und GEF-3: the dry run is the command "plan", not
-# -n/--dry-run; the command is older than the guideline and part of the
+# -n/--dry-run; the command is older than the house HIG and part of the
 # interface (STA-1), so it stays.
 #
 # Default step: backlight-native.
@@ -20,8 +20,9 @@
 # zram, resume= and resume_offset= on the kernel command line).
 #
 # A file is only changed when it has the shape this tool expects; anything
-# else is reported as "foreign" and left alone.
-# Exit: 0 ok, 1 a step failed, 2 usage, 3 not a MacBook9,1.
+# else is reported as "foreign" and left alone. A step that apply was asked for
+# by name and could not take ("foreign", "unsupported") is a failure (KAN-2).
+# Exit: 0 ok, 1 a step failed or no root, 2 usage, 3 not a MacBook9,1.
 set -uo pipefail
 
 ROOT=${MACBOOK91_SYSROOT:-}
@@ -93,9 +94,10 @@ Files:
   /var/lib/macbook91-hw-fixes   records and backups of the applied steps
 
 Exit status:
-  0  done
-  1  a step failed
-  2  usage error, or apply or rollback without root
+  0  done (also when there was nothing to do)
+  1  a step failed, or apply or rollback without root; also apply of a named
+     step that is "foreign" or "unsupported" and was therefore not applied
+  2  usage error
   3  this is not a MacBook9,1
 
 Docs and bug reports: https://github.com/Weegee/macbook91-hw-fixes-pub
@@ -354,7 +356,7 @@ check_dmi() {
 	exit 3
 }
 need_root() { # COMMAND [ID...]
-	[ -n "$ROOT" ] || [ "$(id -u)" = 0 ] || { err "$1 needs root"; printf '  Run: sudo %s %s\n' "$PROG" "$*" >&2; exit 2; }
+	[ -n "$ROOT" ] || [ "$(id -u)" = 0 ] || { err "$1 needs root"; printf '  Run: sudo %s %s\n' "$PROG" "$*" >&2; exit 1; }
 }
 
 known() { [[ " ${ALL[*]} " == *" $1 "* ]]; }
@@ -405,7 +407,10 @@ apply)
 	check_dmi
 	for a in "$@"; do known "$a" || unknown_step "$a"; done
 	need_root apply "$@"; lock
-	[ $# -gt 0 ] || set -- "${STEPS[@]}"
+	# Named steps are a request: one that cannot be applied is a failure. The
+	# default steps are best effort, so for them a skip is only reported.
+	named=0
+	if [ $# -gt 0 ]; then named=1; else set -- "${STEPS[@]}"; fi
 	rc=0
 	for s in "$@"; do
 		st=$(detect "$s")
@@ -414,8 +419,15 @@ apply)
 		applied) say "skip $s: already applied" ;;
 		done) say "skip $s: nothing to do" ;;
 		partial) err "step $s: an earlier apply stopped half-way; run first: sudo $PROG rollback $s"; rc=1 ;;
-		foreign) say "skip $s: content not recognised, left as it is" ;;
-		unsupported) say "skip $s: not supported on this system" ;;
+		foreign | unsupported)
+			if [ "$st" = foreign ]; then what="content not recognised, left as it is"; else what="not supported on this system"; fi
+			if [ "$named" = 1 ]; then
+				err "step $s not applied: $what"
+				printf '  Check the state:  %s status\n' "$PROG" >&2
+				rc=1
+			else
+				say "skip $s: $what"
+			fi ;;
 		esac
 	done
 	exit $rc ;;
@@ -423,14 +435,21 @@ rollback)
 	check_dmi
 	for a in "$@"; do known "$a" || unknown_step "$a"; done
 	need_root rollback "$@"; lock
-	[ $# -gt 0 ] || set -- "${ALL[@]}"
-	rc=0
+	named=0
+	if [ $# -gt 0 ]; then named=1; else set -- "${ALL[@]}"; fi
+	rc=0 done_any=0
 	for ((i = ${#ALL[@]} - 1; i >= 0; i--)); do
 		s=${ALL[i]}
 		[[ " $* " == *" $s "* ]] || continue
-		is_applied "$s" || continue
+		if ! is_applied "$s"; then
+			# Nothing to undo is a success, and the output says so (ERF-2).
+			[ "$named" = 0 ] || say "nothing to roll back: $s"
+			continue
+		fi
+		done_any=1
 		rollback_step "$s" || { err "rollback of $s failed"; rc=1; }
 	done
+	[ "$named" = 1 ] || [ "$done_any" = 1 ] || say "nothing to roll back"
 	exit $rc ;;
 *) usage_error "unknown command '$cmd' (valid: status, plan, apply, rollback)" ;;
 esac

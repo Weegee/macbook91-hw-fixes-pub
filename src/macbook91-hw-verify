@@ -16,7 +16,7 @@ ROOT=${MACBOOK91_SYSROOT:-}
 DEEP=0
 COLOR=${MACBOOK91_HW_VERIFY_COLOR:-auto}
 
-# Colour for channel $1, in the precedence of the text HIG (FAR-4): --color,
+# Colour for channel $1, in the precedence of the house HIG (FAR-4): --color,
 # MACBOOK91_HW_VERIFY_COLOR, NO_COLOR, FORCE_COLOR, TERM=dumb, terminal check.
 use_color() {
 	case $COLOR in always) return 0 ;; never) return 1 ;; esac

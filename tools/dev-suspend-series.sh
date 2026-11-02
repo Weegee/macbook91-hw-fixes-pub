@@ -53,8 +53,9 @@ Environment:
 
 Exit status:
   0  all cycles passed
-  1  a cycle failed
-  2  usage error or not root (run it with sudo from the desktop user's session)
+  1  a cycle failed, or not root (run it with sudo from the desktop user's
+     session)
+  2  usage error
 
 Docs and bug reports: https://github.com/Weegee/macbook91-hw-fixes-pub
 EOT
@@ -72,9 +73,9 @@ case $MODE in deep | s2idle) ;; *) usage_error "MODE must be deep or s2idle, not
 [[ $N =~ ^[0-9]+$ ]] && [ "$N" -gt 0 ] || usage_error "N must be a positive whole number, not '$N'"
 case $LOAD in idle | wlan | audio | camera | all) ;; *) usage_error "LOAD must be idle, wlan, audio, camera or all, not '$LOAD'" ;; esac
 [[ $SLEEP =~ ^[0-9]+$ ]] && [[ $PAUSE =~ ^[0-9]+$ ]] || usage_error "SLEEP and PAUSE must be whole numbers of seconds"
-[ "$(id -u)" = 0 ] || { err "needs root"; printf '  Run: sudo %s %s\n' "$0" "$*" >&2; exit 2; }
+[ "$(id -u)" = 0 ] || { err "needs root"; printf '  Run: sudo %s %s\n' "$0" "$*" >&2; exit 1; }
 user=${SUDO_USER:-}
-{ [ -n "$user" ] && [ "$user" != root ]; } || { err "SUDO_USER is empty or root"; printf '  Run it with sudo from the desktop user'"'"'s session: sudo %s %s\n' "$0" "$*" >&2; exit 2; }
+{ [ -n "$user" ] && [ "$user" != root ]; } || { err "SUDO_USER is empty or root"; printf '  Run it with sudo from the desktop user'"'"'s session: sudo %s %s\n' "$0" "$*" >&2; exit 1; }
 LOGDIR=${LOGDIR:-$(getent passwd "$user" | cut -d: -f6)/.local/state/macbook91-hw-fixes/suspend}
 
 mask() { sed -E 's/([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}/MAC/g'; }
@@ -106,7 +107,7 @@ bl=$(ls -d /sys/class/backlight/* | head -n1)
 
 start_loads() {
 	if [ "$LOAD" = wlan ] || [ "$LOAD" = all ]; then
-		[ -n "$gateway" ] || { err "LOAD wlan needs a default route and there is none"; exit 2; }
+		[ -n "$gateway" ] || { err "LOAD wlan needs a default route and there is none"; exit 1; }
 		ping -q -i 0.2 "$gateway" >/dev/null 2>&1 &
 		pids+=($!)
 	fi

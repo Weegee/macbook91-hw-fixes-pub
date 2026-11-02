@@ -5,7 +5,7 @@
 # /etc/modprobe.d) are made by `macbook91-hw-migrate apply`, which backs them
 # up and can undo them.
 #
-# Messages follow the text HIG: on stderr (pacman shows both streams), as
+# Messages follow the house HIG: on stderr (pacman shows both streams), as
 # "macbook91-hw-fixes: note: ..." or "macbook91-hw-fixes: warning: ...", further
 # lines indented by two spaces, commands copyable. The package name stands in
 # for the program name, because a scriptlet is not a program.
@@ -46,8 +46,11 @@ post_install() {
         "Review what would change:  macbook91-hw-migrate plan" \
         "Apply it, then reboot:     sudo macbook91-hw-migrate apply" \
         "Undo it later:             sudo macbook91-hw-migrate rollback" \
-        "ISO keyboard (German and most European layouts), also:  sudo macbook91-hw-migrate apply keyboard-iso" \
-        "Check the machine (--deep adds the audio, camera and wireless checks, where installed):  macbook91-hw-verify"
+        "ISO keyboard (German and most European layouts), also:" \
+        "  sudo macbook91-hw-migrate apply keyboard-iso" \
+        "Check the machine (--deep adds the audio, camera and wireless checks," \
+        "where installed):" \
+        "  macbook91-hw-verify"
 }
 
 post_upgrade() {

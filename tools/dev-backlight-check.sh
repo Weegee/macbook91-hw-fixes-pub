@@ -37,8 +37,8 @@ Options:
 
 Exit status:
   0  the check passed
-  1  the ramp found problems
-  2  usage error, not root, or no intel_backlight
+  1  the ramp found problems, not root, or no intel_backlight
+  2  usage error
 
 A transient systemd timer restores the starting value even if this script is
 killed: it is armed before the first write and disarmed at the end.
@@ -55,8 +55,8 @@ ramp | zero) ;;
 *) usage_error "unknown mode '$1' (valid: ramp, zero)" ;;
 esac
 [[ ${2:-10} =~ ^[0-9]+$ ]] || usage_error "SECONDS must be a whole number, not '$2'"
-[ "$(id -u)" = 0 ] || { err "needs root"; printf '  Run: sudo %s %s\n' "$0" "$*" >&2; exit 2; }
-[ -d "$BL" ] || { err "no intel_backlight; is acpi_backlight=native active?"; exit 2; }
+[ "$(id -u)" = 0 ] || { err "needs root"; printf '  Run: sudo %s %s\n' "$0" "$*" >&2; exit 1; }
+[ -d "$BL" ] || { err "no intel_backlight; is acpi_backlight=native active?"; exit 1; }
 max=$(cat "$BL/max_brightness")
 start=$(cat "$BL/brightness")
 [ "$start" -gt 0 ] || start=$((max / 2))

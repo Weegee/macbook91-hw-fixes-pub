@@ -91,7 +91,7 @@ Exit status:
 
 
 class Parser(argparse.ArgumentParser):
-    """argparse with the error form of the text HIG: what, then the way to the help."""
+    """argparse with the error form of the house HIG: what, then the way to the help."""
 
     def error(self, message: str) -> None:  # type: ignore[override]
         print(f"{self.prog}: error: {message}", file=sys.stderr)

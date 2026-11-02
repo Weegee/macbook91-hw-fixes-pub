@@ -29,7 +29,9 @@
 #   --src-root DIR       where the DKMS trees are (default /usr/src)
 #   --modules-root DIR   where the kernels are (default /usr/lib/modules)
 #
-# Exit 2: bad arguments, or no installed DKMS tree of this version.
+# Exit 0: covered; with --hook always, so that pacman never reports the hook
+# as failed. Exit 1: not covered, or no installed DKMS tree (or no readable
+# list of tested series) of this version. Exit 2: bad arguments.
 set -u
 
 PROG=kernel-series
@@ -40,7 +42,11 @@ MODE=''
 REL=''
 
 err() { printf '%s: error: %s\n' "$PROG" "$*" >&2; }
-die() { err "$@"; exit 2; }
+# Abweichung von KAN-2 und FEH-6: with --hook an error is still reported on
+# stderr but the exit status is 0. A PostTransaction hook that fails makes
+# pacman report "command failed to execute correctly" for a transaction that
+# went through, and this hook only advises. The other modes exit 1.
+die() { err "$@"; [ "$MODE" != hook ] || exit 0; exit 1; }
 usage_error() { err "$@"; printf 'Help: %s --help\n' "$PROG" >&2; exit 2; }
 usage() {
 	cat <<EOT
@@ -72,9 +78,9 @@ Options:
   -V, --version             show the version
 
 Exit status:
-  0  covered (or --hook finished)
-  1  not covered
-  2  usage error, or no installed DKMS tree of this version
+  0  covered (or --hook finished, whatever it found)
+  1  not covered, or no installed DKMS tree of this version
+  2  usage error
 
 Docs and bug reports: https://github.com/Weegee/macbook91-hw-fixes-pub
 EOT

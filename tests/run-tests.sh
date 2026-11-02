@@ -76,7 +76,7 @@ check "kernel-series --hook: a directory without vmlinuz is no kernel" '! grep -
 check "kernel-series --hook: nothing to report, no output" 'rm -r "$KR/modules/7.3.0-4-cachyos" "$KR/modules/7.4.0-1-cachyos"; [ -z "$(ksx --hook 2>&1)" ]'
 check "kernel-series: --help is on stdout with exit 0, --version names the program" 'h=$(ksx --help 2>/dev/null); [ $? = 0 ] && grep -q "^Usage: kernel-series " <<<"$h" && grep -q "^Exit status:" <<<"$h" && [ "$(ksx -V)" = "kernel-series 1" ]'
 check "kernel-series: a usage error says what, points to --help, exits 2" 'e=$(ksx --frob 2>&1 >/dev/null); [ $? = 2 ] && [ "$(head -n1 <<<"$e")" = "kernel-series: error: unknown option ${SQ}--frob${SQ}" ] && [ "$(tail -n1 <<<"$e")" = "Help: kernel-series --help" ]'
-check "kernel-series: missing tree and bad arguments exit 2" '"$KSX" --src-root "$T/none" --hook >/dev/null 2>&1; [ $? = 2 ] && { ksx --frob >/dev/null 2>&1; [ $? = 2 ]; } && { ksx >/dev/null 2>&1; [ $? = 2 ]; }'
+check "kernel-series: a missing tree is exit 1, with --hook exit 0 and the reason on stderr; bad arguments exit 2" 'e=$("$KSX" --src-root "$T/none" --hook 2>&1 >/dev/null); a=$?; "$KSX" --src-root "$T/none" --applesmc 6.18.1 >/dev/null 2>&1; b=$?; ksx --frob >/dev/null 2>&1; c=$?; ksx >/dev/null 2>&1; d=$?; [ $a = 0 ] && [ $b = 1 ] && [ $c = 2 ] && [ $d = 2 ] && grep -q "^kernel-series: error: no installed applesmc source tree" <<<"$e"'
 H=src/macbook91-hw-fixes-series.hook
 check "hook: runs the installed kernel-series after the transaction, on kernels and on this package" 'grep -qx "Exec = /usr/lib/macbook91-hw-fixes/kernel-series --hook" $H && grep -qx "When = PostTransaction" $H && grep -qx "Target = usr/lib/modules/\*/vmlinuz" $H && grep -qx "Target = usr/src/macbook91-applesmc-\*/dkms.conf" $H && grep -q "/lib/\$(NAME)/kernel-series\"" Makefile && grep -q "hooks/71-macbook91-hw-fixes-series.hook\"" Makefile && [[ 71-macbook91-hw-fixes-series.hook > 70-dkms-install.hook ]]'
 
@@ -152,18 +152,27 @@ mkroot 3
 sed -i 's/pcie_aspm=force/pcie_aspm=force acpi_backlight=video/' "$R/etc/default/limine"
 mig apply >/dev/null 2>&1
 check "a different acpi_backlight= is foreign and kept" 'grep -q "acpi_backlight=video\"" "$R/etc/default/limine" && ! grep -q native "$R/etc/default/limine" && mig status | grep -q "^backlight-native *foreign"'
+out=$(mig apply backlight-native 2>&1 >/dev/null); rc=$?
+check "apply of a named foreign step: exit 1 and an error that names the step (KAN-2)" '[ $rc = 1 ] && grep -qx "macbook91-hw-migrate: error: step backlight-native not applied: content not recognised, left as it is" <<<"$out" && grep -qx "  Check the state:  macbook91-hw-migrate status" <<<"$out" && grep -q "acpi_backlight=video\"" "$R/etc/default/limine"'
+mig apply >/dev/null 2>&1; rc=$?
+check "apply without names: a foreign default step is only reported as skipped, exit 0" '[ $rc = 0 ] && mig apply 2>&1 | grep -qx "skip backlight-native: content not recognised, left as it is"'
 mkroot 4
 sed -i 's/pcie_aspm=force"/pcie_aspm=force acpi_backlight=native"/' "$R/etc/default/limine"
 check "parameter already present: done, no change" 'mig status | grep -q "^backlight-native *done" && ! mig plan | grep -q backlight'
+mig apply backlight-native >/dev/null 2>&1; rc=$?
+check "apply of a named step that is already done: exit 0 (the goal is reached)" '[ $rc = 0 ]'
 mkroot 5
 printf 'KERNEL_CMDLINE[default]+="a"\nKERNEL_CMDLINE[default]+="b"\n' >"$R/etc/default/limine"
 check "two default cmdline lines: foreign" 'mig status | grep -q "^backlight-native *foreign"'
 mkroot 5b
 echo "/swapfile none swap defaults 0 0" >>"$R/etc/fstab"
-check "existing swap in fstab: hibernate foreign, nothing done" 'mig status | grep -q "^hibernate *foreign" && mig apply hibernate | grep -q "^skip hibernate"'
+out=$(mig apply hibernate 2>&1 >/dev/null); rc=$?
+check "existing swap in fstab: hibernate foreign, named apply exits 1 and does nothing" 'mig status | grep -q "^hibernate *foreign" && [ $rc = 1 ] && grep -qx "macbook91-hw-migrate: error: step hibernate not applied: content not recognised, left as it is" <<<"$out" && [ ! -e "$R/var/lib/macbook91-hw-fixes/run.log" ]'
 mkroot 5c
 sed -i "s/ btrfs / ext4 /" "$R/etc/fstab"
 check "non-btrfs root: hibernate unsupported" 'mig status | grep -q "^hibernate *unsupported"'
+out=$(mig apply hibernate 2>&1 >/dev/null); rc=$?
+check "apply of a named unsupported step: exit 1 and an error that says so (KAN-2)" '[ $rc = 1 ] && grep -qx "macbook91-hw-migrate: error: step hibernate not applied: not supported on this system" <<<"$out"'
 mkroot 5d
 sed -i 's/ systemd / udev /' "$R/etc/mkinitcpio.conf"
 check "initramfs without resume support: hibernate unsupported" 'mig status | grep -q "^hibernate *unsupported"'
@@ -213,6 +222,10 @@ lidroot closed enabled; hook pre suspend
 check "lid hook: closed lid keeps LID0 wake on" 'grep -q "\*enabled" "$R/proc/acpi/wakeup"'
 lidroot open disabled; hook post suspend
 check "lid hook: post switches LID0 wake on again" '[ "$(cat "$R/proc/acpi/wakeup")" = LID0 ]'
+# A write that does not take effect (the file stays as it was) must be read back and logged as a warning.
+lidroot open enabled; hook pre suspend
+check "lid hook: a switch that worked is logged as info" 'grep -qx "info: pre suspend: lid open, LID0 wake off (power button wakes)" "$R/lid-wake.log"'
+check "lid hook: a switch that fails is read back and logged as a warning, pre and post (ERF-2, LOG-3)" '[ "$(id -u)" = 0 ] || { lidroot open enabled; chmod 444 "$R/proc/acpi/wakeup"; hook pre suspend 2>/dev/null; grep -qx "warning: pre suspend: lid open, but could not switch LID0 wake off (the machine may wake again at once)" "$R/lid-wake.log" && ! grep -q "power button wakes" "$R/lid-wake.log" && { lidroot closed disabled; chmod 444 "$R/proc/acpi/wakeup"; hook pre suspend 2>/dev/null; grep -qx "warning: pre suspend: lid closed or unknown, but could not switch LID0 wake on (opening may not wake)" "$R/lid-wake.log"; } && { lidroot open disabled; chmod 444 "$R/proc/acpi/wakeup"; hook post suspend 2>/dev/null; grep -qx "warning: post suspend: could not switch LID0 wake on" "$R/lid-wake.log"; }; }'
 lidroot open enabled; echo MacBook10,1 >"$R/sys/class/dmi/id/product_name"; hook pre suspend
 check "lid hook: other model, nothing changed" 'grep -q "\*enabled" "$R/proc/acpi/wakeup"'
 
@@ -238,6 +251,14 @@ check "migrate: status and plan take no step IDs" 'mig status backlight-native >
 check "migrate: --help is on stdout with exit 0 and the sections in the fixed order" 'h=$(mig --help 2>/dev/null); [ $? = 0 ] && [ "$(grep -E "^(Usage|Examples|Commands|Options|Files|Exit status|Docs and bug reports):" <<<"$h" | cut -d: -f1 | tr "\n" ,)" = "Usage,Examples,Commands,Options,Files,Exit status,Docs and bug reports," ] && [ -z "$(mig --help 2>&1 >/dev/null)" ]'
 check "migrate: -h works after a command, --version prints name and version" 'mig apply -h | grep -q "^Usage: macbook91-hw-migrate " && [ "$(mig --version)" = "macbook91-hw-migrate dev" ]'
 check "rollback of an unknown step exits 2" 'mkroot 8; mig rollback nosuch >/dev/null 2>&1; [ $? = 2 ]'
+mkroot rb
+out=$(mig rollback backlight-native 2>&1); rc=$?
+check "rollback of a step that is not applied: exit 0 and the output says so" '[ $rc = 0 ] && [ "$out" = "nothing to roll back: backlight-native" ]'
+out=$(mig rollback 2>&1); rc=$?
+check "rollback without names and nothing applied: exit 0 and the output says so" '[ $rc = 0 ] && [ "$out" = "nothing to roll back" ]'
+# need_root as the tool defines it, run without a fake root: apply and rollback need root (exit 1, not a usage error).
+{ printf 'PROG=macbook91-hw-migrate\nROOT=\nerr() { printf "%%s: error: %%s\\n" "$PROG" "$*" >&2; }\n'; sed -n '/^need_root()/,/^}/p' "$MIG"; echo 'need_root apply backlight-native'; } >"$T/needroot.sh"
+check "migrate: apply or rollback without root exits 1 (not a usage error) and names the sudo command" '[ "$(id -u)" = 0 ] || { o=$(bash "$T/needroot.sh" 2>&1); [ $? = 1 ] && grep -qx "macbook91-hw-migrate: error: apply needs root" <<<"$o" && grep -qx "  Run: sudo macbook91-hw-migrate apply backlight-native" <<<"$o"; }'
 
 # --- verify against a fake system
 mkdir -p "$T/bin"
@@ -302,6 +323,8 @@ echo 7.3.0-4-cachyos >"$R/proc/sys/kernel/osrelease"
 mkdir -p "$R/usr/lib/modules/7.3.0-4-cachyos/kernel/drivers/platform/x86" "$R/sys/class/power_supply/macsmc-battery"
 : >"$R/usr/lib/modules/7.3.0-4-cachyos/kernel/drivers/platform/x86/macsmc-acpi.ko.zst"
 echo 100 >"$R/sys/class/power_supply/macsmc-battery/charge_control_end_threshold"
+# The tested list must not contain 7.3 whatever kernel this machine runs.
+printf '6.18\n7.2\n' >"$R/usr/src/macbook91-backlight-1/TESTED-SERIES"
 out=$(DKMS_EXTRA='' ver)
 check "verify: a kernel with macsmc-acpi is named, not called in-tree applesmc" 'grep -q "^WARN dkms: macbook91-applesmc not built: kernel 7.3.0-4-cachyos (Linux 7.3) .*own Apple SMC driver, macsmc-acpi" <<<"$out" && ! grep -qi "in-tree" <<<"$out"'
 check "verify: a charge limit of the kernel's own driver is reported, not passed" 'grep -q "^INFO charge limit: macsmc-battery offers charge_control_end_threshold 100 %" <<<"$out" && ! grep -q "^PASS charge limit" <<<"$out"'
@@ -324,7 +347,7 @@ check "verify: SPIT disabled is only INFO" 'o=$(ver); grep -q "^INFO wakeup: SPI
 sed -i 's/LID0\t  S4\t\*enabled/LID0\t  S4\t*disabled/' "$R/proc/acpi/wakeup"
 out=$(ver)
 check "verify: LID0 disabled fails" 'grep -q "^FAIL wakeup: LID0" <<<"$out"'
-# Colour (text HIG FAR-3/FAR-4): --color > MACBOOK91_HW_VERIFY_COLOR > NO_COLOR > FORCE_COLOR > terminal.
+# Colour (house HIG FAR-3/FAR-4): --color > MACBOOK91_HW_VERIFY_COLOR > NO_COLOR > FORCE_COLOR > terminal.
 check "verify: no colour when stdout is not a terminal" '! ver | grep -q "$ESC"'
 check "verify: FORCE_COLOR colours the keywords, and only them" 'grep -q "$ESC" <<<"$(FORCE_COLOR=1 ver)" && [ "$(FORCE_COLOR=1 ver | sed "s/$ESC\[[0-9;]*m//g")" = "$(ver)" ]'
 check "verify: NO_COLOR beats FORCE_COLOR" '! NO_COLOR=1 FORCE_COLOR=1 ver | grep -q "$ESC"'
@@ -377,7 +400,7 @@ if command -v makepkg >/dev/null; then
 	check "promote: --seal covers the filled-in STATUS.txt" 'prom --seal "$v" >/dev/null && (cd "$RR/release/$v" && sha256sum -c --quiet SHA256SUMS)'
 fi
 
-# --- command-line interface of the repository tools (text HIG: help, version, usage errors)
+# --- command-line interface of the repository tools (house HIG: help, version, usage errors)
 for tool in tools/dev-backlight-check.sh tools/dev-suspend-series.sh kernel/applesmc/add-series.sh packaging/promote-release.sh; do
 	n=$(basename "$tool")
 	check "$n: --help is the full help on stdout, exit 0, nothing on stderr" 'o=$("$tool" --help 2>"$T/err"); [ $? = 0 ] && [ ! -s "$T/err" ] && grep -q "^Usage: \(sudo \)\?$n" <<<"$o" && grep -q "^Exit status:" <<<"$o" && [ "$(tail -n1 <<<"$o")" = "Docs and bug reports: https://github.com/Weegee/macbook91-hw-fixes-pub" ]'
@@ -388,6 +411,7 @@ done
 check "mkdist: --help is the full help on stdout, exit 0, nothing on stderr" 'o=$(python3 packaging/mkdist.py --help 2>"$T/err"); [ $? = 0 ] && [ ! -s "$T/err" ] && grep -q "^Usage: mkdist.py" <<<"$o" && grep -q "^Exit status:" <<<"$o"'
 check "mkdist: --version prints its name and the version of this repository" '[ "$(python3 packaging/mkdist.py --version)" = "mkdist.py $(cat VERSION)" ]'
 check "mkdist: an unknown option is a usage error: error form, Help pointer, exit 2" 'o=$(python3 packaging/mkdist.py --bogus 2>"$T/err"); rc=$?; [ $rc = 2 ] && [ -z "$o" ] && grep -q "^mkdist.py: error: " "$T/err" && [ "$(tail -n1 "$T/err")" = "Help: mkdist.py --help" ]'
+check "dev tools: without root they stop with exit 1 before they touch anything (not a usage error)" '[ "$(id -u)" = 0 ] || { tools/dev-backlight-check.sh ramp >/dev/null 2>&1; a=$?; tools/dev-suspend-series.sh deep 1 >/dev/null 2>&1; b=$?; [ $a = 1 ] && [ $b = 1 ]; }'
 check "dev tools: bad arguments are refused before the root check" '! grep -q "needs root" <<<"$(tools/dev-backlight-check.sh bogus 2>&1)" && ! grep -q "needs root" <<<"$(tools/dev-suspend-series.sh bogus 2>&1)"'
 check "add-series: refuses without a tag: usage error, exit 2" '"$T/asx/add-series.sh" >/dev/null 2>"$T/err"; [ $? = 2 ] && grep -q "^add-series.sh: error: " "$T/err"'
 check "add-series: result and progress go to stderr, stdout stays empty" 'rm -rf "$T/asy" && mkdir -p "$T/asy" && cp -r "$AS"/add-series.sh "$AS"/0001-applesmc-charge-limit-through-BCLM.patch "$AS"/UPSTREAM.lock "$AS"/dkms.conf "$AS"/upstream "$T/asy/" && o=$(MACBOOK91_APPLESMC_SRC="$AS/upstream/7.2/applesmc.c" "$T/asy/add-series.sh" v9.9.2 2>"$T/err"); [ -z "$o" ] && grep -q "^add-series.sh: note: pinned Linux 9.9" "$T/err"'
@@ -397,6 +421,8 @@ INST=packaging/arch/macbook91-hw-fixes.install
 check "scriptlet: valid bash" 'bash -n "$INST"'
 check "scriptlet: no banner-style messages, every message goes through _msg to stderr" '! grep -q "echo \":: " "$INST" && ! grep -q "printf .*macbook91-hw-fixes: " <(grep -v "^    printf" "$INST") && grep -q "^_msg()" "$INST" && grep -q ">&2" "$INST"'
 check "scriptlet: _msg writes note: and warning: lines with indented continuation lines on stderr" '(eval "$(sed -n "/^_msg()/,/^}/p" "$INST")"; o=$(_msg note "one" "two" 2>&1 >/dev/null); [ "$o" = "$(printf "macbook91-hw-fixes: note: one\n  two")" ] && o=$(_msg warning "w" 2>&1 >/dev/null) && [ "$o" = "macbook91-hw-fixes: warning: w" ] && [ -z "$(_msg note x 2>/dev/null)" ])'
+
+check "scriptlet: the post_install text stays within 80 columns (TYP-2)" '(eval "$(sed -n "/^_msg()/,/^}/p" "$INST")"; _nvme_d3cold() { :; }; _applesmc_hint() { :; }; eval "$(sed -n "/^post_install()/,/^}/p" "$INST")"; o=$(post_install 2>&1); [ -n "$o" ] && ! awk "length > 80" <<<"$o" | grep -q .)'
 
 # --- package contents
 if [ -n "${PKGDIR_CHECK:-}" ]; then
