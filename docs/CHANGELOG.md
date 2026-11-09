@@ -6,14 +6,36 @@ measured, the package checksum) is `release/<version>/STATUS.txt`; the
 release tool keeps at most the two newest releases in the tree, older releases
 are not part of this repository.
 
-## 20261102.01
+## 20261109.01 (2026-11-09)
+
+**The documentation follows the house HIG (documentation part). The modules, the
+hook file, the udev rule, the migration steps and the tools are unchanged.**
+
+- README: restructured in the house order: what the package does, Installation
+  (prerequisites, install from the release files, build from a checkout, apply
+  the migration steps), Usage, Kernel series, Verification status, Configuration,
+  Documentation, Bug reports, AI assistance, License and See also. Installation
+  and hibernate are numbered steps with one action each and every command in
+  its own fish block; the warning about `--ignore-missing` stands before the
+  step it concerns; every command that was not run for this release is marked
+  NOT VERIFIED. New: an example of the `macbook91-hw-verify` output, a Bug reports
+  section and the See also list of the three driver packages.
+- README correction: `sha256sum -c --ignore-missing SHA256SUMS` skips only
+  `.SRCINFO`, not `STATUS.txt`; the four files of a release read `OK` (VERIFIED
+  against the public release 20261102.01).
+- Changelog: every heading carries the ISO date, and incompatible changes come
+  first and start with **Incompatible:**.
+- Tests: none added; no code changed.
+
+## 20261102.01 (2026-11-02)
 
 **Exit statuses, log levels and message layout of the text interfaces follow
 the house HIG (text part), which replaces the separate text HIG; the rule IDs
 are the same. The modules, the hook file, the udev rule and the migration
 steps are unchanged.**
 
-Interface changes (STA-4); what scripts parse stays as it was:
+**Incompatible:** three exit statuses changed. Check scripts that read them
+(interface changes, STA-4; what scripts parse stays as it was):
 
 - `macbook91-hw-migrate apply ID...`: a step that is named and cannot be
   applied because it is `foreign` or `unsupported` now ends with exit status 1
@@ -28,14 +50,17 @@ Interface changes (STA-4); what scripts parse stays as it was:
   also exit 1 for a missing `intel_backlight`, a missing default route and an
   empty `SUDO_USER`). Exit status 2 now means a usage error only; the help
   texts say so.
-- `macbook91-hw-migrate rollback ID` for a step that is not applied prints
-  `nothing to roll back: ID` and exits 0; `rollback` without names prints
-  `nothing to roll back` when nothing was applied. It was silent (ERF-2).
 - `kernel-series`: a missing DKMS tree or a malformed series list is exit
   status 1 (it was 2), and with `--hook` exit status 0 with the error on
   stderr, as the help always said: a failing PostTransaction hook makes pacman print
   an error after an otherwise good transaction. Abweichung von KAN-2 und FEH-6: `--hook` exits 0
   even when it could not do its job, because it only advises.
+
+Other interface changes:
+
+- `macbook91-hw-migrate rollback ID` for a step that is not applied prints
+  `nothing to roll back: ID` and exits 0; `rollback` without names prints
+  `nothing to roll back` when nothing was applied. It was silent (ERF-2).
 - `sleep/macbook91-lid-wake`: "could not switch LID0 wake on" is logged with
   priority `user.warning` (it was `user.info`). The `pre` branch now reads the
   wake state back like `post` does and logs `user.warning` when the write did
@@ -47,11 +72,16 @@ Interface changes (STA-4); what scripts parse stays as it was:
   the verify check for an untested backlight series no longer depends on the
   series of the running kernel (it failed on 7.3).
 
-## 20261026.02
+## 20261026.02 (2026-10-26)
 
 **Text interfaces follow the house text guidelines (HIG): help, version, error
 and warning messages, colour and exit codes. The modules, the hook file, the
 udev rule and the migration steps are unchanged.**
+
+**Incompatible:** on a machine other than a MacBook9,1 the message of
+`macbook91-hw-verify` goes to stderr, and the report of the pacman hook
+(`kernel-series --hook`) and the messages of the install scriptlet have a new
+form on stderr. Check scripts that read them (details below).
 
 Interface changes (STA-4); what scripts parse stays as it was:
 
@@ -93,7 +123,7 @@ Interface changes (STA-4); what scripts parse stays as it was:
   precedence of the verifier, the hook output form, scriptlet messages,
   `promote-release.sh -n`.
 
-## 20261026.01
+## 20261026.01 (2026-10-26)
 
 **Kernel series: the LTS kernel is the default, and a pacman hook reports
 every installed kernel the two modules do not cover. CachyOS 7.3 gets no
@@ -130,7 +160,7 @@ driver. The module sources and the udev rule are unchanged.**
   upstream directories exactly, a fake 7.3 kernel with `macsmc-acpi` in the
   verifier, package contents.
 
-## 20261021.01
+## 20261021.01 (2026-10-21)
 
 **First release prepared for the public repository: changes to the shipped
 scripts and the package dependencies, plus documentation and licensing text.
@@ -138,15 +168,9 @@ The kernel modules and the udev rule are unchanged.**
 
 Commit hashes named in entries up to 20261021.01 belong to the maintainer's private history and do not exist in the public repository.
 
-- The package stands on its own: it no longer depends on
-  `macbook91-cs4208-dkms`, `macbook91-facetimehd-dkms` and
-  `macbook91-wireless-dkms`. `macbook91-hw-verify` checks those packages and
-  their DKMS modules only where they are installed (INFO otherwise, no FAIL),
-  no longer checks for the camera firmware package (the camera package checks
-  its firmware itself), and `--deep` skips a verify tool that is not installed.
-- Removed: the two `macbook91-hw-migrate` steps that deleted earlier
+- **Incompatible:** the two `macbook91-hw-migrate` steps that deleted earlier
   hand-installed files (an NVMe udev rule and a sleep hook of a previous
-  setup), the matching check for that hook in `macbook91-lid-wake`, and the
+  setup) are removed, with the matching check for that hook in `macbook91-lid-wake`, and the
   INFO branch for it in `macbook91-hw-verify`. The sleep check no longer
   accepts such a hand-installed hook in place of the packaged one (it was
   reported as INFO before): only `macbook91-lid-wake` passes, otherwise the
@@ -164,6 +188,12 @@ Commit hashes named in entries up to 20261021.01 belong to the maintainer's priv
   lines, NOT RUN on hardware). `docs/coverage.json` and `docs/test-status.json`
   describe the packaged rule and hook as the only ones and mark the old
   migration runs as historical.
+- **Incompatible:** the package stands on its own: it no longer depends on
+  `macbook91-cs4208-dkms`, `macbook91-facetimehd-dkms` and
+  `macbook91-wireless-dkms`. `macbook91-hw-verify` checks those packages and
+  their DKMS modules only where they are installed (INFO otherwise, no FAIL),
+  no longer checks for the camera firmware package (the camera package checks
+  its firmware itself), and `--deep` skips a verify tool that is not installed.
 - README: install instructions for Arch Linux from the release files or a
   checkout (the driver packages are optional and have their own instructions;
   all files of the release go into one empty directory;
@@ -201,7 +231,7 @@ Commit hashes named in entries up to 20261021.01 belong to the maintainer's priv
   20261020.02 (same sources). The lid hook did not run at a real suspend after
   the install.
 
-## 20261020.02
+## 20261020.02 (2026-10-20)
 
 **Documentation only, no code change. 6.18 (CachyOS LTS) hardware gate
 recorded: `macbook91-hw-verify` PASS; suspend on 6.18 NOT VERIFIED.** The
@@ -252,7 +282,7 @@ and `macbook91-facetimehd-dkms` pass.
 - Tests: `make check` 105 passed, 0 failed; with package contents 110
   passed, 0 failed; shellcheck clean; namcap 0 errors (8 dependency warnings).
 
-## 20261020.01
+## 20261020.01 (2026-10-20)
 
 No code change since 20261015.01; only packaged text. License: own work is
 GPL-3.0-or-later, the module Makefiles and `dkms.conf` GPL-2.0-or-later,
