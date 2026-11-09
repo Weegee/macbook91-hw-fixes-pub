@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-02T13:40+01:00",
+  "updated": "2026-11-09T06:19+01:00",
   "kernel": "6.18.55-2-cachyos-lts",
   "runs": [
     {
@@ -496,6 +496,31 @@
       "test": "release 20261102.01 lid hook on the real /proc/acpi/wakeup, macbook91-hw-migrate apply and rollback as root on the real system, dev tools' measuring runs, hardware gate (pacman -U, DKMS builds, hook output in a real transaction, reboot, macbook91-hw-verify from the installed package)",
       "result": "NOT_RUN",
       "detail": "needs a MacBook9,1, root or a suspend and the owner; the release is not conditional on it, as for 20261026.02. The changes are covered by the hermetic tests with fake roots and stub commands only."
+    },
+    {
+      "test": "release 20261109.01 (documentation): tests/run-tests.sh (hermetic, kernel module builds skipped with SKIP_KBUILD, offline), with package contents of the built package, make dist twice from a clean clone and once with --allow-dirty (identical), make arch-pkg, namcap, ShellCheck, git diff --check",
+      "result": "PASS",
+      "detail": "2026-11-09 in a clean clone of the committed tree: 172 passed, 0 failed; 180 passed, 0 failed with the package contents. make dist is reproducible (sha256 4e7d7859…); the source tarball differs from that of 20261102.01 only in README.md and VERSION (diff -r); namcap reports only 'dependency may not be needed' warnings; ShellCheck at warning level and git diff --check clean; the local gate in the clone: private tests 22 passed, 0 failed, 1 blocked (core.hooksPath in a throw-away clone), export guard 0 hits."
+    },
+    {
+      "test": "release 20261109.01 read-only commands of the README on a MacBook9,1 (kernel 7.3.3-1-cachyos, installed package 20261102.01-1): macbook91-hw-verify, macbook91-hw-migrate status and plan, kernel-series --applesmc, version output",
+      "result": "PASS",
+      "detail": "2026-11-09: macbook91-hw-verify pass=21 warn=2 fail=0 (the two warnings are the missing charge limit on kernel 7.3), kernel-series --applesmc exits 1 on 7.3.3 as the README says."
+    },
+    {
+      "test": "release 20261109.01 install check of the README against the public release 20261102.01 (files in an empty directory, sha256sum -c --ignore-missing SHA256SUMS)",
+      "result": "PASS",
+      "detail": "2026-11-09: four OK lines (PKGBUILD, macbook91-hw-fixes.install, STATUS.txt, the tarball), exit 0; with the install file removed three OK lines and exit 0, which is why the README warns. makepkg was not run."
+    },
+    {
+      "test": "release 20261109.01 README commands that change the system (macbook91-hw-migrate apply and rollback, hibernate, charge limit write, modprobe, pacman) and kernel module build checks of the suite",
+      "result": "NOT_RUN",
+      "detail": "need root or the owner; the README marks each of them NOT VERIFIED. The module build checks were skipped with SKIP_KBUILD: the applesmc check cannot pass on kernel 7.3, it failed in a baseline run before the changes (173 passed, 1 failed). The module sources and Makefiles are byte-identical to 20261102.01."
+    },
+    {
+      "test": "release 20261109.01 hardware gate: pacman -U, DKMS builds, a reboot, macbook91-hw-verify from the installed package",
+      "result": "NOT_RUN",
+      "detail": "needs the owner (sudo password, reboot); no code changed since 20261102.01, so the release is not conditional on it."
     }
   ]
 }
