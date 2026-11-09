@@ -368,8 +368,16 @@ KB=/lib/modules/$(uname -r)/build
 if [ -r "$KB/Module.symvers" ] && [ -z "${SKIP_KBUILD:-}" ]; then
 	cp "$REPO"/kernel/macbook91_backlight.c "$REPO"/kernel/Makefile "$T/"
 	check "kernel module builds without warnings" 'out=$(make -C "$T" KDIR="$KB" PKGVER=test 2>&1) && [ -f "$T/macbook91_backlight.ko" ] && ! grep -qi warning <<<"$out"'
-	mkdir -p "$T/as" && cp -r "$AS"/Makefile "$AS"/0001-applesmc-charge-limit-through-BCLM.patch "$AS"/upstream "$T/as/"
-	check "applesmc builds without warnings for the running kernel" 'out=$(make -C "$T/as" sources 2>&1 && make -C "$T/as" KDIR="$KB" PKGVER=test 2>&1) && [ -f "$T/as/build/applesmc.ko" ] && ! grep -qi warning <<<"$out" && modinfo -F macbook91 "$T/as/build/applesmc.ko" | grep -qx "charge-limit test"'
+	# Only a series with a pinned source has an applesmc build. Linux 7.3 has none on purpose
+	# (the kernel's own macsmc driver takes the SMC, see README, Kernel series), so a 7.3 kernel
+	# is not a failure of this check.
+	KS=$(sed -n 's/.*UTS_RELEASE "\([0-9]*\.[0-9]*\).*/\1/p' "$KB/include/generated/utsrelease.h" 2>/dev/null)
+	if [ -n "$KS" ] && [ ! -r "$AS/upstream/$KS/applesmc.c" ]; then
+		printf 'SKIP applesmc builds without warnings for the running kernel: Linux %s has no pinned applesmc source, the package builds none for it\n' "$KS"
+	else
+		mkdir -p "$T/as" && cp -r "$AS"/Makefile "$AS"/0001-applesmc-charge-limit-through-BCLM.patch "$AS"/upstream "$T/as/"
+		check "applesmc builds without warnings for the running kernel" 'out=$(make -C "$T/as" sources 2>&1 && make -C "$T/as" KDIR="$KB" PKGVER=test 2>&1) && [ -f "$T/as/build/applesmc.ko" ] && ! grep -qi warning <<<"$out" && modinfo -F macbook91 "$T/as/build/applesmc.ko" | grep -qx "charge-limit test"'
+	fi
 fi
 
 # --- release promotion against a fake repository
