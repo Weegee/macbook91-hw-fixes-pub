@@ -1,0 +1,50 @@
+macbook91-hw-fixes 20261109.01-1 - RELEASE (tag v20261109.01, prepared 2026-11-09; the hardware gate is NOT_RUN and stays open)
+
+What: documentation release. The README follows the house HIG (documentation
+part): what the package does, Installation, Usage, Kernel series, Verification
+status, Configuration, Documentation, Bug reports, AI assistance, License and
+See also; numbered steps with one action each, one command per fish block, and
+NOT VERIFIED on every command that was not run for this release. The install
+text is corrected: sha256sum -c --ignore-missing skips only .SRCINFO, and
+STATUS.txt reads OK. The changelog headings carry ISO dates and incompatible
+changes come first. No code changed.
+- Details: docs/CHANGELOG.md.
+
+Source tarball against that of 20261102.01: only README.md and VERSION differ
+(diff -r of the two extracted tarballs); the tools, the module sources, their
+Makefiles, the applesmc patch and upstream copies, UPSTREAM.lock, the udev
+rule, the pacman hook file and docs/FINDINGS.md are byte-identical.
+
+Measured without a MacBook (2026-11-09, clean clone of the committed tree):
+- make dist: built twice from a clean clone and once with --allow-dirty from
+  the working tree, identical, sha256
+  4e7d7859796cfaf80a0ed3f7ffb2b0d1b7c8f33028a514177a8e03641d13507d, the one
+  pinned in PKGBUILD; make arch-pkg builds the package from it; .SRCINFO
+  current (promote-release.sh checks it).
+- tests/run-tests.sh with the kernel module builds skipped (SKIP_KBUILD=1),
+  offline: 172 passed, 0 failed; 180 passed, 0 failed with the package-content
+  checks on the extracted package.
+- namcap: seven dependency warnings for the package (listed by design), 0
+  errors. ShellCheck at warning level and git diff --check clean.
+- Local gate of promote-release.sh in the clean clone: the private test script
+  22 passed, 0 failed, 1 blocked (core.hooksPath is not set in a throw-away
+  clone); the export guard 0 hits.
+
+Measured on a MacBook9,1 (2026-11-09, kernel 7.3.3-1-cachyos, installed package
+20261102.01-1, read-only commands only): macbook91-hw-verify pass=21 warn=2
+fail=0, macbook91-hw-migrate status and plan, kernel-series --applesmc (exit 1
+on 7.3, as documented). The download check of the README against the public
+release 20261102.01: sha256sum -c --ignore-missing SHA256SUMS prints four OK
+lines (PKGBUILD, macbook91-hw-fixes.install, STATUS.txt, the tarball); without
+the install file it prints three and still exits 0, which is why the README
+warns.
+
+NOT_RUN: the two kernel module build checks of the suite (SKIP_KBUILD; the
+applesmc check cannot pass on kernel 7.3 because no applesmc series exists
+for it), every README command that changes the system (macbook91-hw-migrate
+apply and rollback, hibernate, the charge limit write, modprobe, pacman), the
+hardware gate (pacman -U, DKMS builds, a reboot, the installed
+macbook91-hw-verify of this version).
+
+Built package (not tracked; local build, makepkg output differs per machine):
+f5c4b13052dbad20d1c7f5cdaed534d3eb26880bacc5f985a4d746a9f878d6b9  macbook91-hw-fixes-20261109.01-1-any.pkg.tar.zst
