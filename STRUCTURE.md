@@ -43,8 +43,10 @@ Makefile, VERSION   the package contract: `make dist` writes
 tests/              run-tests.sh: hermetic (no root, hardware or network).
 tools/              development helpers for the test machine, not packaged
                     (dev-suspend-series.sh, dev-backlight-check.sh).
-docs/               FINDINGS.md (packaged), PLAN.md, CHANGELOG.md,
-                    coverage.json, test-status.json.
+docs/               user pages (install, migrate, verify, brightness,
+                    charge-limit, kernel-series), FINDINGS.md (packaged),
+                    CHANGELOG.md, coverage.json, test-status.json;
+                    entwicklung/ holds the developer notes.
 release/<pkgver>/   promoted releases (PKGBUILD, .SRCINFO, scriptlet, source
                     tarball, STATUS.txt, SHA256SUMS); promote-release.sh keeps
                     the two newest, older releases are not part of this

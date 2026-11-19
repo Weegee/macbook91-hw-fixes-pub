@@ -249,6 +249,7 @@ check "migrate: an unknown option is a usage error, in any position" 'mig --bogu
 check "migrate: an unknown step lists the valid ones, exit 2" 'e=$(mig apply nosuch 2>&1); [ $? = 2 ] && grep -q "^macbook91-hw-migrate: error: unknown step ${SQ}nosuch${SQ} (valid: backlight-native, keyboard-iso, hibernate)$" <<<"$e"'
 check "migrate: status and plan take no step IDs" 'mig status backlight-native >/dev/null 2>&1; a=$?; mig plan nosuch >/dev/null 2>&1; b=$?; [ $a = 2 ] && [ $b = 2 ]'
 check "migrate: --help is on stdout with exit 0 and the sections in the fixed order" 'h=$(mig --help 2>/dev/null); [ $? = 0 ] && [ "$(grep -E "^(Usage|Examples|Commands|Options|Files|Exit status|Docs and bug reports):" <<<"$h" | cut -d: -f1 | tr "\n" ,)" = "Usage,Examples,Commands,Options,Files,Exit status,Docs and bug reports," ] && [ -z "$(mig --help 2>&1 >/dev/null)" ]'
+check "migrate: --help fits one screen, --help all is the full help with the Steps section" 's=$(mig --help); a=$(mig --help all 2>&1); [ "$(wc -l <<<"$s")" -le 40 ] && grep -q "^Steps:" <<<"$a" && grep -q "^Output of status:" <<<"$a" && [ "$(mig apply --help all)" = "$a" ] && [ "$(wc -l <<<"$a")" -gt "$(wc -l <<<"$s")" ]'
 check "migrate: -h works after a command, --version prints name and version" 'mig apply -h | grep -q "^Usage: macbook91-hw-migrate " && [ "$(mig --version)" = "macbook91-hw-migrate dev" ]'
 check "rollback of an unknown step exits 2" 'mkroot 8; mig rollback nosuch >/dev/null 2>&1; [ $? = 2 ]'
 mkroot rb

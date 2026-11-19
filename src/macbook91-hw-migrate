@@ -54,6 +54,46 @@ usage() {
 Usage: $PROG [COMMAND] [ID...]
 
 Set the kernel parameter the package relies on and, when named, two optional
+settings on an Apple MacBook9,1. Every change is backed up and reversible.
+
+Examples:
+  macbook91-hw-migrate
+      what each step finds now
+  macbook91-hw-migrate plan
+      what apply would change
+  sudo macbook91-hw-migrate apply
+      apply the pending default step
+  sudo macbook91-hw-migrate rollback hibernate
+      undo one step
+
+Commands:
+  status             show what each step finds now (default)
+  plan               show what apply would change; changes nothing
+  apply [ID...]      apply the pending default steps, or the named ones (root)
+  rollback [ID...]   undo applied steps, newest first (root)
+
+Steps: backlight-native (default), keyboard-iso, hibernate (both optional)
+
+Options:
+      --help all   the full help: steps, output format, all exit statuses
+  -h, --help       show this help
+  -V, --version    show the version
+
+Files:
+  /var/lib/macbook91-hw-fixes   records and backups of the applied steps
+
+Exit status:
+  0  done      1  a step failed or no root      2  usage error
+  3  this is not a MacBook9,1
+
+Docs and bug reports: https://github.com/Weegee/macbook91-hw-fixes-pub
+EOT
+}
+usage_all() {
+	cat <<EOT
+Usage: $PROG [COMMAND] [ID...]
+
+Set the kernel parameter the package relies on and, when named, two optional
 settings on an Apple MacBook9,1. Every change is backed up, recorded and
 reversible. A file is only changed when it has the shape this tool expects;
 anything else is reported as "foreign" and left alone.
@@ -378,6 +418,13 @@ trap 'on_signal INT' INT
 trap 'on_signal TERM' TERM
 
 # -h and -V work in any position; any other option is a usage error.
+prev=
+for a in "$@"; do
+	case $a in
+	all) if [ "$prev" = --help ]; then usage_all; exit 0; fi ;;
+	esac
+	prev=$a
+done
 for a in "$@"; do
 	case $a in
 	-h | --help) usage; exit 0 ;;

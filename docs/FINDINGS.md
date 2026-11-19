@@ -171,7 +171,7 @@ The section on kernel 6.18 was measured later, on 2026-10-20.
   at once (1.22 A → 0), at 100 it charges again. REPORTED: AlDente
   lists the MacBook 12" 2016 as working with BCLM; applesmc-next uses BCLM for
   `charge_control_end_threshold`. Implemented as the DKMS replacement
-  `macbook91-applesmc` (PLAN.md measure 10). VERIFIED: `capacity` in sysfs refers to the
+  `macbook91-applesmc` (measure 10 of the retired plan). VERIFIED: `capacity` in sysfs refers to the
   design capacity (charge_now/charge_full_design, 70 % at 3.87/5.55 Ah), Plasma/UPower to
   today's full charge (90 % at 3.87/4.31 Ah). At "full", sysfs therefore shows ~78 %.
 - Charge limit (`macbook91-applesmc`) unneeded once in-tree `applesmc` itself offers the key
