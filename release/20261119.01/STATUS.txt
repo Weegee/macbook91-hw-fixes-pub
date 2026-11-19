@@ -1,0 +1,38 @@
+macbook91-hw-fixes 20261119.01-1 - RELEASE (tag v20261119.01, prepared 2026-11-19; the hardware gate is NOT_RUN and stays open)
+
+What: documentation and help release. The README is cut to 88 lines with one
+page per task; the details moved to docs/ (install, migrate, verify, brightness,
+charge-limit, kernel-series). macbook91-hw-migrate --help is a short help that
+fits one screen; --help all prints the full help. The applesmc build check of
+the test suite is skipped on a kernel series without a pinned applesmc source.
+Modules, hook file, udev rule, migration steps and exit statuses are unchanged.
+- Details: docs/CHANGELOG.md.
+
+Source tarball against that of 20261109.01 (diff -r of the two extracted
+tarballs): only README.md, docs/FINDINGS.md (one reference to the retired
+plan), src/macbook91-hw-migrate (the help) and VERSION differ; the module
+sources, their Makefiles, the applesmc patch and upstream copies, UPSTREAM.lock,
+the udev rule, the pacman hook file and the other tools are byte-identical. The
+install file is byte-identical to that of 20261109.01.
+
+Measured without a MacBook-specific run (2026-11-19, kernel 6.18 LTS, committed
+tree):
+- make dist: built twice, identical, sha256
+  66ae2798d36d52b45ee09f4992d928f878f8e713e32bdd6f3e7239172f8eb01a, the one
+  pinned in PKGBUILD; make arch-pkg builds the package from it; .SRCINFO
+  current (promote-release.sh checks it).
+- tests/run-tests.sh including the two kernel module builds: 175 passed,
+  0 failed.
+- Pre-release check of the package repository (--bauen) in a clean clone:
+  tarball and package without hits.
+- Local gate of promote-release.sh: the private test script 19 passed, 0 failed,
+  1 blocked (core.hooksPath is not set in this checkout); the export guard
+  0 hits.
+
+NOT_RUN: namcap and ShellCheck for this release, every README command that
+changes the system (macbook91-hw-migrate apply and rollback, hibernate, the
+charge limit write, modprobe, pacman), the hardware gate (pacman -U, DKMS
+builds, a reboot, the installed macbook91-hw-verify of this version).
+
+Built package (not tracked; local build, makepkg output differs per machine):
+bbf57899a964773ecfe56655805180f234a55135e5acc95e05f00a5dbee7a922  macbook91-hw-fixes-20261119.01-1-any.pkg.tar.zst
