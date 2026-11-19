@@ -6,6 +6,27 @@ measured, the package checksum) is `release/<version>/STATUS.txt`; the
 release tool keeps at most the two newest releases in the tree, older releases
 are not part of this repository.
 
+## 20261119.01 (2026-11-19)
+
+**The README is shorter and the user pages moved to `docs/`; `macbook91-hw-migrate
+--help` fits one screen. The modules, the hook file, the udev rule, the migration
+steps and their exit statuses are unchanged.**
+
+- README: cut to 88 lines with one page per task. The details moved to
+  `docs/install.md`, `docs/migrate.md`, `docs/verify.md`, `docs/brightness.md`,
+  `docs/charge-limit.md` and `docs/kernel-series.md`; the developer notes are in
+  `docs/entwicklung/README.md`. `docs/PLAN.md` is gone, `docs/FINDINGS.md` only
+  names the retired plan.
+- `macbook91-hw-migrate --help` now shows a short help that fits one screen
+  (usage, examples, commands, options, files, exit statuses). `--help all`
+  prints the full help as before: steps, output format of `status`, all exit
+  statuses. Nothing that scripts parse changed.
+- Tests: the applesmc build check is skipped, with a message, on a kernel series
+  that has no pinned applesmc source (Linux 7.3 on purpose); a new check covers
+  the two help screens.
+- Repository: the legacy resume runner and the `graft` cache entries are removed
+  from the tree; neither is part of the package.
+
 ## 20261109.01 (2026-11-09)
 
 **The documentation follows the house HIG (documentation part). The modules, the
