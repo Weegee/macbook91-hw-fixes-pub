@@ -29,6 +29,7 @@ check ".SRCINFO pkgver equals VERSION" 'grep -qx "	pkgver = $(cat VERSION)" pack
 check "no MAC address, serial or LUKS UUID tracked" '! git grep -nIE "([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}|C02[A-Z0-9]{8}|luks(-|\.uuid=|\.name=)[0-9a-f]{8}-" -- . ":!tests/run-tests.sh" ":!private" >/dev/null'
 check "no shipped file names the removed predecessor files or steps" '[ -z "$(git grep -nIE "ai_o[p]t|legacy-(d3cold|sleep)" -- src sleep udev kernel Makefile README.md docs/FINDINGS.md packaging/arch)" ]'
 check "no local-only caches tracked" '[ -z "$(git ls-files | grep -E "^(\\.conte[x]t|gra[f]t/\\.graph)(/|\$)")" ]'
+check "install: the relative links of the installed README.md and docs/ pages resolve" '(d=$T/inst; make -s DESTDIR="$d" PREFIX=/usr install >/dev/null 2>&1; doc=$d/usr/share/doc/macbook91-hw-fixes; [ -f "$doc/README.md" ] || exit 1; for f in "$doc"/README.md "$doc"/docs/*.md "$doc"/docs/entwicklung/README.md; do for l in $(grep -o "](\\([^)]*\\))" "$f" | sed "s/^](//;s/)\$//" | grep -vE "^(https?:|#|mailto:)" | sed "s/#.*//"); do [ -e "$(dirname "$f")/$l" ] || { echo "dead link in $f: $l" >&2; exit 1; }; done; done)'
 
 # --- licenses: SPDX lines, PKGBUILD license, texts, GPLv2 for what builds the modules
 spdx=$(git grep -h -o "SPDX-License-Identifier: [A-Za-z0-9.+-]*" -- src sleep udev kernel Makefile | sed "s/.*: //" | sort -u)

@@ -18,6 +18,11 @@
 NAME := macbook91-hw-fixes
 VERSION := $(shell cat VERSION)
 APPLESMC_PATCH := 0001-applesmc-charge-limit-through-BCLM.patch
+# Installed under share/doc/NAME/ with the same paths as in the repository, so
+# the relative links in README.md and docs/ work in the installed copy.
+DOCS := docs/install.md docs/migrate.md docs/verify.md docs/brightness.md \
+	docs/charge-limit.md docs/kernel-series.md docs/CHANGELOG.md docs/FINDINGS.md \
+	docs/test-status.json docs/coverage.json docs/entwicklung/README.md
 
 PREFIX ?= /usr
 DESTDIR ?=
@@ -53,7 +58,7 @@ install:
 	sed 's/@PKGVER@/$(VERSION)/' kernel/applesmc/dkms.conf >"$$d/dkms.conf"; \
 	chmod 644 "$$d/dkms.conf"
 	install -Dm644 README.md "$(DESTDIR)$(PREFIX)/share/doc/$(NAME)/README.md"
-	install -Dm644 docs/FINDINGS.md "$(DESTDIR)$(PREFIX)/share/doc/$(NAME)/FINDINGS.md"
+	for f in $(DOCS); do install -Dm644 "$$f" "$(DESTDIR)$(PREFIX)/share/doc/$(NAME)/$$f"; done
 
 dist:
 	python3 packaging/mkdist.py

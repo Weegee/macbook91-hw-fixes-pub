@@ -1,7 +1,7 @@
 # Developer notes
 
-- [../FINDINGS.md](../FINDINGS.md): findings and evidence per measure. Packaged as
-  `/usr/share/doc/macbook91-hw-fixes/FINDINGS.md`, so it stays in `docs/`.
+- [../FINDINGS.md](../FINDINGS.md): findings and evidence per measure. Packaged with the other
+  pages under `/usr/share/doc/macbook91-hw-fixes/docs/`, so the links work there too.
 - [../test-status.json](../test-status.json): every test run with its result and the open
   hardware gates. [../coverage.json](../coverage.json): the coverage matrix.
 - `STRUCTURE.md` in the repository root: what lives where.
