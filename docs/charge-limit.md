@@ -7,7 +7,7 @@ Management**; the Plasma interface itself is NOT VERIFIED). Measured: above the 
 stops at once.
 
 Read the limit in percent. The file exists only on kernels the module is built for
-([kernel-series.md](kernel-series.md)); on kernel 7.3.3 the command reports that the file does
+([kernel-series.md](kernel-series.md)); before Linux 7.3 was pinned, kernel 7.3.3 reported that the file does
 not exist (VERIFIED 2026-11-09):
 
 ```fish

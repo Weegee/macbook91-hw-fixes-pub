@@ -5,3 +5,5 @@
 # on 2026-10-14. Format: series tag sha256 path
 6.18 v6.18.55 f7517c1c9cb152bed1171774425b18191f05dd2e2fb70a84d988bea3021fd309 upstream/6.18/applesmc.c
 7.2 v7.2.9 c23b1c1a3fc9c090d8fe40e76b11de5e984b185ccc857c4ff4565c00d5abbd04 upstream/7.2/applesmc.c
+# 7.3 fetched on 2026-11-23
+7.3 v7.3.5 3f930296eb6e808a420b8ab72cfa1926919e957ef36ebec60b5400a4c1f751fd upstream/7.3/applesmc.c

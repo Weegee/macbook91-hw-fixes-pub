@@ -236,6 +236,13 @@ The section on kernel 6.18 was measured later, on 2026-10-20.
   tested there. Open, a decision for
   the maintainer: rely on the kernel's macsmc on 7.3 after a check on the hardware, or build
   applesmc for 7.3 and keep `macsmc-acpi` from loading.
+- Update 2026-11-23 (host kernel 7.3.5-2-cachyos): VERIFIED (kernel config, module tree): the kernel
+  has `CONFIG_SENSORS_APPLESMC=m` again and ships `applesmc.ko.zst` (DMI alias
+  `dmi*:pn*MacBook*:rvn*Apple*:`) next to `macsmc-acpi.ko.zst`, so the stock kernel already has the
+  two drivers side by side. Series 7.3 is pinned from v7.3.5 (sha256 in `UPSTREAM.lock`), patch
+  fuzz 0, offline build against the 7.3.5-2 headers exit 0. The option (a) / (b) decision above
+  stays open: no modprobe rule was added. A connection with the hang of 2026-11-21 09:51 is
+  an unchecked guess.
 
 ## Journal warnings (`journalctl -b -p4`, review 2026-10-14)
 The messages of devices that need no action. The other messages were handed over to the

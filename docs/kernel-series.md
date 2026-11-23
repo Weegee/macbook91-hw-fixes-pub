@@ -14,10 +14,15 @@ checks the installed kernels. For a series without an applesmc source it warns o
 charge limit of this package there, boot the LTS kernel. For a series the backlight was not
 tested on it prints a note. The hook builds nothing and never stops the transaction.
 
-CachyOS's Linux 7.3 builds no applesmc: it brings its own Apple SMC driver, `macsmc-acpi`. The
-two must not drive the SMC at the same time, so `macbook91-applesmc` is not built for 7.3
-(`docs/FINDINGS.md`). Whether the charge limit of the kernel's `macsmc-power` works on the
-MacBook9,1 is NOT VERIFIED.
+Linux 7.3 (pinned from v7.3.5 on 2026-11-23): CachyOS 7.3.0 switched applesmc off and shipped
+its own Apple SMC driver, `macsmc-acpi`; the 7.3.5-2 kernel has `CONFIG_SENSORS_APPLESMC=m`
+again and ships `applesmc` and `macsmc-acpi` side by side (VERIFIED: kernel config and module
+tree on the test machine, 2026-11-23). The charge limit patch applies to v7.3.5 with fuzz 0 and
+the patched source builds against the 7.3.5-2 headers (VERIFIED offline, not installed). NOT
+VERIFIED: that the DKMS build loads on 7.3.5, that the charge limit works there, and which of
+the two drivers binds the SMC first. Both can drive the SMC ports at the same time without a
+common lock (`docs/FINDINGS.md`, section Kernel 7.3); whether to keep `macsmc-acpi` from loading
+on 7.3 is open.
 
 Ask by hand whether a kernel has an applesmc source (exit 0 if covered, 1 if not; VERIFIED
 2026-11-09 on kernel 7.3.3, exit 1), and check all installed kernels as the hook does:

@@ -46,7 +46,7 @@ check "applesmc: patch applies with fuzz 0 to every series" '(for f in "$AS"/ups
 # add-series.sh against a copy of kernel/applesmc, with a local source instead of the network.
 mkdir -p "$T/asx" && cp -r "$AS"/add-series.sh "$AS"/0001-applesmc-charge-limit-through-BCLM.patch "$AS"/UPSTREAM.lock "$AS"/dkms.conf "$AS"/upstream "$T/asx/"
 MACBOOK91_APPLESMC_SRC="$AS/upstream/7.2/applesmc.c" "$T/asx/add-series.sh" v9.9.1 >/dev/null 2>&1; rc=$?
-check "add-series: pins a new series in UPSTREAM.lock and dkms.conf" '[ $rc = 0 ] && (cd "$T/asx" && grep -v "^#" UPSTREAM.lock | awk "{print \$3\"  \"\$4}" | sha256sum --quiet -c) && grep -q "^9\.9 v9\.9\.1 " "$T/asx/UPSTREAM.lock" && grep -qxF "BUILD_EXCLUSIVE_KERNEL=\"^(6\\.18|7\\.2|9\\.9)\\.\"" "$T/asx/dkms.conf"'
+check "add-series: pins a new series in UPSTREAM.lock and dkms.conf" '[ $rc = 0 ] && (cd "$T/asx" && grep -v "^#" UPSTREAM.lock | awk "{print \$3\"  \"\$4}" | sha256sum --quiet -c) && grep -q "^9\.9 v9\.9\.1 " "$T/asx/UPSTREAM.lock" && grep -qxF "BUILD_EXCLUSIVE_KERNEL=\"^(6\\.18|7\\.2|7\\.3|9\\.9)\\.\"" "$T/asx/dkms.conf"'
 check "add-series: refuses a series that is already pinned" '! MACBOOK91_APPLESMC_SRC="$AS/upstream/7.2/applesmc.c" "$T/asx/add-series.sh" v7.2.10 >/dev/null 2>&1'
 check "applesmc: dkms.conf BUILD_EXCLUSIVE_KERNEL lists exactly the upstream series" '[ "$(sed -n "s/^BUILD_EXCLUSIVE_KERNEL=\"^(\(.*\))\\\\.\"$/\1/p" "$AS/dkms.conf")" = "$(cd "$AS/upstream" && ls -d */ | tr -d / | sed "s/\./\\\\./g" | paste -sd"|")" ]'
 check "backlight: TESTED-SERIES lists well-formed series" '[ -n "$(grep -vE "^(#|$)" kernel/TESTED-SERIES)" ] && ! grep -vE "^(#.*|[0-9]+\.[0-9]+)?$" kernel/TESTED-SERIES | grep -q .'
@@ -58,22 +58,22 @@ KR=$T/ks
 mkdir -p "$KR"/src/macbook91-applesmc-1/6.18 "$KR"/src/macbook91-applesmc-1/7.2 "$KR"/src/macbook91-backlight-1
 : >"$KR"/src/macbook91-applesmc-1/6.18/applesmc.c; : >"$KR"/src/macbook91-applesmc-1/7.2/applesmc.c
 cp kernel/TESTED-SERIES "$KR"/src/macbook91-backlight-1/
-for k in 6.18.55-2-cachyos-lts 7.3.0-4-cachyos 7.4.0-1-cachyos; do mkdir -p "$KR/modules/$k"; : >"$KR/modules/$k/vmlinuz"; done
-mkdir -p "$KR"/modules/7.3.0-4-cachyos/kernel/drivers/platform/x86 "$KR"/modules/headers-only
-: >"$KR"/modules/7.3.0-4-cachyos/kernel/drivers/platform/x86/macsmc-acpi.ko.zst
+for k in 6.18.55-2-cachyos-lts 7.4.0-1-cachyos 7.5.0-1-cachyos; do mkdir -p "$KR/modules/$k"; : >"$KR/modules/$k/vmlinuz"; done
+mkdir -p "$KR"/modules/7.4.0-1-cachyos/kernel/drivers/platform/x86 "$KR"/modules/headers-only
+: >"$KR"/modules/7.4.0-1-cachyos/kernel/drivers/platform/x86/macsmc-acpi.ko.zst
 ksx() { "$KSX" --src-root "$KR/src" --modules-root "$KR/modules" "$@"; }
 check "kernel-series: a series with a source is supported" 'ksx --applesmc 6.18.55-2-cachyos-lts >/dev/null'
-check "kernel-series: another series is not, and its own SMC driver is named" 'o=$(ksx --applesmc 7.3.0-4-cachyos); [ $? = 1 ] && grep -q "(Linux 7.3) is not a series macbook91-applesmc has a source for (6.18 7.2)" <<<"$o" && grep -q "own Apple SMC driver, macsmc-acpi" <<<"$o"'
-check "kernel-series: a kernel without any SMC driver says so" 'ksx --applesmc 7.4.0-1-cachyos | grep -q "has no Apple SMC driver"'
-check "kernel-series: the backlight is tested on the listed series only" 'ksx --backlight 7.2.11-1-cachyos >/dev/null && ! ksx --backlight 7.3.0-4-cachyos >/dev/null'
+check "kernel-series: another series is not, and its own SMC driver is named" 'o=$(ksx --applesmc 7.4.0-1-cachyos); [ $? = 1 ] && grep -q "(Linux 7.4) is not a series macbook91-applesmc has a source for (6.18 7.2)" <<<"$o" && grep -q "own Apple SMC driver, macsmc-acpi" <<<"$o"'
+check "kernel-series: a kernel without any SMC driver says so" 'ksx --applesmc 7.5.0-1-cachyos | grep -q "has no Apple SMC driver"'
+check "kernel-series: the backlight is tested on the listed series only" 'ksx --backlight 7.2.11-1-cachyos >/dev/null && ! ksx --backlight 7.4.0-1-cachyos >/dev/null'
 out=$(ksx --hook 2>&1); rc=$?
 out_stdout=$(ksx --hook 2>/dev/null)
-check "kernel-series --hook: a warning for each kernel without an applesmc source, none for a covered one" '[ $rc = 0 ] && [ "$(grep -c "^macbook91-hw-fixes: warning: kernel " <<<"$out")" = 2 ] && ! grep -q "====" <<<"$out" && grep -q "kernel 7.3.0-4-cachyos (Linux 7.3)" <<<"$out" && grep -q "kernel 7.4.0-1-cachyos (Linux 7.4)" <<<"$out" && ! grep -q "6.18.55" <<<"$out"'
+check "kernel-series --hook: a warning for each kernel without an applesmc source, none for a covered one" '[ $rc = 0 ] && [ "$(grep -c "^macbook91-hw-fixes: warning: kernel " <<<"$out")" = 2 ] && ! grep -q "====" <<<"$out" && grep -q "kernel 7.4.0-1-cachyos (Linux 7.4)" <<<"$out" && grep -q "kernel 7.5.0-1-cachyos (Linux 7.5)" <<<"$out" && ! grep -q "6.18.55" <<<"$out"'
 check "kernel-series --hook: one note line per kernel with an untested backlight series" '[ "$(grep -c "^macbook91-hw-fixes: note: macbook91_backlight is built for kernel" <<<"$out")" = 2 ]'
 check "kernel-series --hook: messages go to stderr, stdout stays empty" '[ -z "$out_stdout" ]'
 check "kernel-series --hook: continuation lines are indented by two spaces" 'grep -q "^  so the charge limit of this package is not built for it\.$" <<<"$out"'
 check "kernel-series --hook: a directory without vmlinuz is no kernel" '! grep -q headers-only <<<"$out"'
-check "kernel-series --hook: nothing to report, no output" 'rm -r "$KR/modules/7.3.0-4-cachyos" "$KR/modules/7.4.0-1-cachyos"; [ -z "$(ksx --hook 2>&1)" ]'
+check "kernel-series --hook: nothing to report, no output" 'rm -r "$KR/modules/7.4.0-1-cachyos" "$KR/modules/7.5.0-1-cachyos"; [ -z "$(ksx --hook 2>&1)" ]'
 check "kernel-series: --help is on stdout with exit 0, --version names the program" 'h=$(ksx --help 2>/dev/null); [ $? = 0 ] && grep -q "^Usage: kernel-series " <<<"$h" && grep -q "^Exit status:" <<<"$h" && [ "$(ksx -V)" = "kernel-series 1" ]'
 check "kernel-series: a usage error says what, points to --help, exits 2" 'e=$(ksx --frob 2>&1 >/dev/null); [ $? = 2 ] && [ "$(head -n1 <<<"$e")" = "kernel-series: error: unknown option ${SQ}--frob${SQ}" ] && [ "$(tail -n1 <<<"$e")" = "Help: kernel-series --help" ]'
 check "kernel-series: a missing tree is exit 1, with --hook exit 0 and the reason on stderr; bad arguments exit 2" 'e=$("$KSX" --src-root "$T/none" --hook 2>&1 >/dev/null); a=$?; "$KSX" --src-root "$T/none" --applesmc 6.18.1 >/dev/null 2>&1; b=$?; ksx --frob >/dev/null 2>&1; c=$?; ksx >/dev/null 2>&1; d=$?; [ $a = 0 ] && [ $b = 1 ] && [ $c = 2 ] && [ $d = 2 ] && grep -q "^kernel-series: error: no installed applesmc source tree" <<<"$e"'
@@ -319,17 +319,17 @@ rm -r "$R/usr/src/macbook91-applesmc-1/$ser"
 check "verify: macbook91-applesmc without a source for the kernel warns" 'DKMS_EXTRA= ver | grep -q "^WARN dkms: macbook91-applesmc not built: kernel $(uname -r) (Linux $ser) is not a series"'
 rm -f "$R/sys/class/power_supply/BAT0/charge_control_end_threshold"
 check "verify: charge limit without a source names the kernel" 'ver | grep -q "^WARN charge limit: this package.s charge limit is not built for kernel $(uname -r)"'
-# A kernel of a series without a source that brings its own SMC driver (CachyOS 7.3).
-echo 7.3.0-4-cachyos >"$R/proc/sys/kernel/osrelease"
-mkdir -p "$R/usr/lib/modules/7.3.0-4-cachyos/kernel/drivers/platform/x86" "$R/sys/class/power_supply/macsmc-battery"
-: >"$R/usr/lib/modules/7.3.0-4-cachyos/kernel/drivers/platform/x86/macsmc-acpi.ko.zst"
+# A kernel of a series without a source that brings its own SMC driver (CachyOS 7.3 had it).
+echo 7.4.0-1-cachyos >"$R/proc/sys/kernel/osrelease"
+mkdir -p "$R/usr/lib/modules/7.4.0-1-cachyos/kernel/drivers/platform/x86" "$R/sys/class/power_supply/macsmc-battery"
+: >"$R/usr/lib/modules/7.4.0-1-cachyos/kernel/drivers/platform/x86/macsmc-acpi.ko.zst"
 echo 100 >"$R/sys/class/power_supply/macsmc-battery/charge_control_end_threshold"
-# The tested list must not contain 7.3 whatever kernel this machine runs.
+# The tested list must not contain 7.4 whatever kernel this machine runs.
 printf '6.18\n7.2\n' >"$R/usr/src/macbook91-backlight-1/TESTED-SERIES"
 out=$(DKMS_EXTRA='' ver)
-check "verify: a kernel with macsmc-acpi is named, not called in-tree applesmc" 'grep -q "^WARN dkms: macbook91-applesmc not built: kernel 7.3.0-4-cachyos (Linux 7.3) .*own Apple SMC driver, macsmc-acpi" <<<"$out" && ! grep -qi "in-tree" <<<"$out"'
+check "verify: a kernel with macsmc-acpi is named, not called in-tree applesmc" 'grep -q "^WARN dkms: macbook91-applesmc not built: kernel 7.4.0-1-cachyos (Linux 7.4) .*own Apple SMC driver, macsmc-acpi" <<<"$out" && ! grep -qi "in-tree" <<<"$out"'
 check "verify: a charge limit of the kernel's own driver is reported, not passed" 'grep -q "^INFO charge limit: macsmc-battery offers charge_control_end_threshold 100 %" <<<"$out" && ! grep -q "^PASS charge limit" <<<"$out"'
-check "verify: an untested backlight series is reported" 'grep -q "^INFO dkms: macbook91_backlight is built for kernel 7.3.0-4-cachyos but not tested on Linux 7.3" <<<"$out"'
+check "verify: an untested backlight series is reported" 'grep -q "^INFO dkms: macbook91_backlight is built for kernel 7.4.0-1-cachyos but not tested on Linux 7.4" <<<"$out"'
 vroot acpi_video0 90
 out=$(ver)
 check "verify: acpi_video0 without parameter warns" 'grep -q "^WARN backlight: acpi_video0 reaches only 90 %" <<<"$out"'
@@ -369,9 +369,8 @@ KB=/lib/modules/$(uname -r)/build
 if [ -r "$KB/Module.symvers" ] && [ -z "${SKIP_KBUILD:-}" ]; then
 	cp "$REPO"/kernel/macbook91_backlight.c "$REPO"/kernel/Makefile "$T/"
 	check "kernel module builds without warnings" 'out=$(make -C "$T" KDIR="$KB" PKGVER=test 2>&1) && [ -f "$T/macbook91_backlight.ko" ] && ! grep -qi warning <<<"$out"'
-	# Only a series with a pinned source has an applesmc build. Linux 7.3 has none on purpose
-	# (the kernel's own macsmc driver takes the SMC, see README, Kernel series), so a 7.3 kernel
-	# is not a failure of this check.
+	# Only a series with a pinned source has an applesmc build; on any other series the check is skipped
+	# (the package builds none there, see README, Kernel series), not failed.
 	KS=$(sed -n 's/.*UTS_RELEASE "\([0-9]*\.[0-9]*\).*/\1/p' "$KB/include/generated/utsrelease.h" 2>/dev/null)
 	if [ -n "$KS" ] && [ ! -r "$AS/upstream/$KS/applesmc.c" ]; then
 		printf 'SKIP applesmc builds without warnings for the running kernel: Linux %s has no pinned applesmc source, the package builds none for it\n' "$KS"

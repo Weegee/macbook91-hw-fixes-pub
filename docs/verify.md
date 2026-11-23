@@ -27,7 +27,7 @@ PASS nvme: d3cold_allowed=0, its root port stays in D0 during suspend
 RESULT pass=21 warn=2 fail=0
 ```
 
-Both warnings report the missing charge limit on kernel 7.3 ([kernel-series.md](kernel-series.md)).
+Both warnings reported the missing charge limit on kernel 7.3.3, before Linux 7.3 was pinned ([kernel-series.md](kernel-series.md)).
 
 ## Wake and NVMe
 
