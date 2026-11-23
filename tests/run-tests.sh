@@ -398,6 +398,7 @@ if command -v makepkg >/dev/null; then
 	check "promote: refuses a stale .SRCINFO" '! prom >/dev/null 2>&1 && [ ! -e "$RR/release/$v" ]'
 	(cd "$RR"/packaging/arch && makepkg --printsrcinfo >.SRCINFO 2>/dev/null)
 	check "promote: -n runs the checks, lists what it would promote and changes nothing" 'o=$(prom -n 2>&1); [ $? = 0 ] && [ ! -e "$RR/release/$v" ] && grep -q "^dry run: the checks passed" <<<"$o" && grep -q "^  dist/macbook91-hw-fixes-$v-1-any.pkg.tar.zst$" <<<"$o"'
+	check "promote: no colour without a terminal; FORCE_COLOR colours keywords only, NO_COLOR wins over it" 'o=$(prom -n 2>&1); ! grep -q "$ESC" <<<"$o" && c=$(FORCE_COLOR=1 prom -n 2>&1) && grep -q "$ESC" <<<"$c" && [ "$(sed "s/$ESC\[[0-9;]*m//g" <<<"$c")" = "$o" ] && ! NO_COLOR=1 FORCE_COLOR=1 prom -n 2>&1 | grep -q "$ESC"'
 	check "promote: -n still refuses what a promotion would refuse" 'sed -i "s/^pkgver=.*/pkgver=1.1/" "$RR"/packaging/arch/PKGBUILD; prom -n >/dev/null 2>&1; r=$?; sed -i "s/^pkgver=.*/pkgver=$v/" "$RR"/packaging/arch/PKGBUILD; [ $r = 1 ]'
 	check "promote: copies, seals and records the package checksum" 'prom >/dev/null 2>&1 && (cd "$RR/release/$v" && sha256sum -c --quiet SHA256SUMS) && grep -q "^$(sha "$RR/dist/macbook91-hw-fixes-$v-1-any.pkg.tar.zst")  macbook91-hw-fixes-$v-1-any.pkg.tar.zst" "$RR/release/$v/STATUS.txt"'
 	check "promote: keeps the two newest releases" '[ -d "$RR/release/20260201.01" ] && [ ! -e "$RR/release/20260101.01" ]'

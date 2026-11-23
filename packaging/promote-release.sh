@@ -34,9 +34,21 @@ CMD=packaging/promote-release.sh # as typed from the repository root
 VERSION=$(cat "$ROOT/VERSION" 2>/dev/null || echo dev)
 STAGE='' CREATED='' # removed again when a signal ends the run early
 
+# Colour for stream $1, in the precedence of the house HIG (FAR-4) without a
+# --color option: NO_COLOR, FORCE_COLOR, TERM=dumb, terminal check. Only the
+# keywords are coloured, so stripping the escapes gives the plain text.
+use_color() {
+	[ -z "${NO_COLOR:-}" ] || return 1
+	{ [ -z "${FORCE_COLOR:-}" ] || [ "$FORCE_COLOR" = 0 ]; } || return 0
+	[ "${TERM:-dumb}" != dumb ] && [ -t "$1" ]
+}
+G='' D='' O='' ER='' EO=''
+if use_color 1; then G=$'\e[32m' D=$'\e[2m' O=$'\e[0m'; fi
+if use_color 2; then ER=$'\e[31m' EO=$'\e[0m'; fi
+
 err() { # err MESSAGE [LINE...]: the error on stderr, further lines indented
 	local l
-	printf '%s: error: %s\n' "$PROG" "$1" >&2
+	printf '%s: %serror%s: %s\n' "$PROG" "$ER" "$EO" "$1" >&2
 	shift
 	for l in "$@"; do printf '  %s\n' "$l" >&2; done
 }
@@ -71,6 +83,7 @@ Options:
 
 Environment:
   MACBOOK91_RELEASE_ROOT   use this directory as the repository root (tests)
+  NO_COLOR, FORCE_COLOR    switch the colour off or on (default: on a terminal)
 
 Files:
   VERSION, packaging/arch/PKGBUILD   the version to promote
@@ -135,7 +148,7 @@ seal() { # seal DIR
 	[ -n "$src" ] || { err "no source tarball in ${1#"$ROOT"/}" "Run: make dist"; return 1; }
 	# shellcheck disable=SC2086 # word splitting of the file list is intended
 	(cd "$1" && sha256sum -- $TRACKED_FILES "$src" >SHA256SUMS)
-	echo "sealed $1/SHA256SUMS over: $TRACKED_FILES $src"
+	echo "${G}sealed${O} $1/SHA256SUMS over: $TRACKED_FILES $src"
 }
 
 # The local gate is optional: it runs only in a checkout that has the extra
@@ -149,17 +162,17 @@ done
 local_gate() {
 	local t ex stage rc=0 found=0
 	if [ -z "$PRIV" ]; then
-		echo "local gate: skipped (no extra check directory in this checkout)"
+		echo "${D}local gate: skipped (no extra check directory in this checkout)${O}"
 		return 0
 	fi
 	# 1. the extra test scripts, each with its own counters.
 	for t in "$PRIV"/tests/run-*.sh; do
 		[ -e "$t" ] || continue
 		found=1
-		echo "local gate: running ${t#"$ROOT"/}"
+		echo "${D}local gate: running ${t#"$ROOT"/}${O}"
 		bash "$t" || { err "local gate: ${t#"$ROOT"/} failed"; rc=1; }
 	done
-	[ "$found" -eq 1 ] || echo "local gate: no test script found"
+	[ "$found" -eq 1 ] || echo "${D}local gate: no test script found${O}"
 	# 2. the export guard over the files a commit would carry: tracked and
 	# untracked-but-not-ignored files of the working tree, minus the paths
 	# the export removes. A hit of the path-name group is a hard failure here.
@@ -181,7 +194,7 @@ local_gate() {
 			done \
 			| tar --null --no-recursion -T - -cf - | tar -C "$stage" -xf -
 	) || { err "local gate: could not stage the files for the export guard"; rm -rf "$stage"; STAGE=''; return 1; }
-	echo "local gate: scanning $(find "$stage" -type f | wc -l) files with the export guard"
+	echo "${D}local gate: scanning $(find "$stage" -type f | wc -l) files with the export guard${O}"
 	bash "$ex/guard.sh" --conf "$ex" --strict tree "$stage" || { err "local gate: the export guard found hits"; rc=1; }
 	rm -rf "$stage"
 	STAGE=''
@@ -243,7 +256,7 @@ if [ ! -e "$SRCTAR" ] || [ "$(sha256sum "$SRCTAR" | cut -d' ' -f1)" != "$PINNED"
 fi
 
 if [ "$DRY" -eq 1 ]; then
-	echo "dry run: the checks passed; would promote $PKGBASE $PKGVER-$PKGREL to ${DEST#"$ROOT"/}:"
+	echo "${G}dry run${O}: the checks passed; would promote $PKGBASE $PKGVER-$PKGREL to ${DEST#"$ROOT"/}:"
 	for f in "$ARCH/PKGBUILD" "$ARCH/.SRCINFO" "$ARCH/macbook91-hw-fixes.install" "$SRCTAR" "$PKGFILE"; do
 		echo "  ${f#"$ROOT"/}"
 	done
@@ -289,9 +302,9 @@ while read -r v; do
 	n=$((n + 1))
 	[ "$n" -le 2 ] && continue
 	rm -rfv "${ROOT:?}/release/$v" | tail -1
-	echo "pruned release/$v (kept the 2 newest; older releases are not part of this repository)"
+	echo "${D}pruned release/$v (kept the 2 newest; older releases are not part of this repository)${O}"
 done < <(find "$ROOT/release" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V -r)
 
-echo "promoted $PKGBASE $PKGVER-$PKGREL to $DEST"
+echo "${G}promoted${O} $PKGBASE $PKGVER-$PKGREL to $DEST"
 echo "fill in $DEST/STATUS.txt, then re-seal the checksums it is part of:"
 echo "  $HERE/promote-release.sh --seal $PKGVER"
