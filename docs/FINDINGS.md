@@ -221,7 +221,9 @@ The section on kernel 6.18 was measured later, on 2026-10-20.
 - VERIFIED (source): `macsmc-acpi` takes the SMC's I/O port from `_CRS` and uses it with
   `inb`/`outb` without reserving it; applesmc reserves its fixed ports and loads by DMI
   (`dmi*:pn*MacBook*:rvn*Apple*:`). A `macbook91-applesmc` built for 7.3 would load next to
-  `macsmc-acpi`, and both would drive the SMC ports at the same time without a common lock. That
+  `macsmc-acpi`, and both would drive the SMC ports at the same time without a common lock.
+  (Superseded 2026-11-23, see the update below: the conflict is real, but series 7.3 is pinned now
+  and the decision (a)/(b) is open.) That
   rules out a 7.3 series of `macbook91-applesmc` on its own. The patch itself is no obstacle: it
   applies to `v7.3` with fuzz 0, and the patched source builds against the 7.3.0-4 headers
   (scratch build, not packaged).
