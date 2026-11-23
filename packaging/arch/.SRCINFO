@@ -1,6 +1,6 @@
 pkgbase = macbook91-hw-fixes
 	pkgdesc = Hardware fixes and checks for the Apple MacBook9,1 (A1534): backlight, charge limit, NVMe, lid wake
-	pkgver = 20261119.01
+	pkgver = 20261123.01
 	pkgrel = 1
 	url = https://github.com/Weegee/macbook91-hw-fixes-pub
 	arch = any
@@ -9,8 +9,8 @@ pkgbase = macbook91-hw-fixes
 	license = GPL-2.0-only
 	makedepends = make
 	makedepends = patch
-	source = macbook91-hw-fixes-20261119.01.tar
-	sha256sums = 66ae2798d36d52b45ee09f4992d928f878f8e713e32bdd6f3e7239172f8eb01a
+	source = macbook91-hw-fixes-20261123.01.tar
+	sha256sums = 36b54f836587ca61820a9cab0a1f3ad405651f190b9809b6a1e728ded3cb7b2d
 
 pkgname = macbook91-hw-fixes
 	install = macbook91-hw-fixes.install
