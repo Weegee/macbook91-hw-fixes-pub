@@ -6,6 +6,29 @@ measured, the package checksum) is `release/<version>/STATUS.txt`; the
 release tool keeps at most the two newest releases in the tree, older releases
 are not part of this repository.
 
+## 20261123.01 (2026-11-23)
+
+**The charge limit is available on Linux 7.3 again (pinned from v7.3.5), and the
+installed package now carries all `docs/` pages. The backlight module, the hook
+file, the udev rule, the migration steps and their exit statuses are unchanged.**
+
+- applesmc: DKMS builds `macbook91-applesmc` for the 7.3 series from the pinned
+  v7.3.5 source with the charge limit patch. CachyOS 7.3.5-2 has `applesmc`
+  again, next to its own `macsmc-acpi`. NOT VERIFIED: that the module loads on
+  7.3.5, that the charge limit works there, and which of the two drivers binds
+  the SMC first (`docs/kernel-series.md`, `docs/FINDINGS.md`, section Kernel 7.3).
+- Kernel-series hook: on 7.3 it no longer warns that the charge limit is
+  missing.
+- Package: the `docs/` pages, the changelog, `test-status.json`,
+  `coverage.json` and `docs/entwicklung/README.md` are installed under
+  `/usr/share/doc/macbook91-hw-fixes/docs/`, so the links in the installed
+  README work. `FINDINGS.md` moved there from the parent directory.
+- Docs: the statements about the missing charge limit on 7.3.3 are marked as
+  superseded.
+- Tests: the series checks treat 7.3 as pinned.
+- Repository: `packaging/promote-release.sh` colours its keywords on a terminal
+  (`NO_COLOR` and `FORCE_COLOR` apply); the text stays the same without colour.
+
 ## 20261119.01 (2026-11-19)
 
 **The README is shorter and the user pages moved to `docs/`; `macbook91-hw-migrate
