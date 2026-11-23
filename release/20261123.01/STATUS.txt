@@ -1,0 +1,32 @@
+macbook91-hw-fixes 20261123.01-1 - RELEASE (tag v20261123.01, prepared 2026-11-23; the hardware gate is NOT_RUN and stays open)
+
+What: applesmc (the charge limit) for the Linux 7.3 series, pinned from v7.3.5
+(kernel/applesmc/upstream/7.3/applesmc.c, UPSTREAM.lock, dkms.conf), and the
+docs/ pages in the installed package (README links resolve; FINDINGS.md moved
+to docs/). packaging/promote-release.sh colours its keywords on a terminal.
+The backlight module, hook file, udev rule, migration steps and exit statuses
+are unchanged.
+- Details: docs/CHANGELOG.md.
+
+Measured without a MacBook (2026-11-23, kernel 7.3.5-2-cachyos on the build
+machine, committed tree):
+- make dist: built twice, identical, sha256
+  36b54f836587ca61820a9cab0a1f3ad405651f190b9809b6a1e728ded3cb7b2d, the one
+  pinned in PKGBUILD; make arch-pkg builds the package from it; .SRCINFO current (promote-release.sh checks it).
+- tests/run-tests.sh including the two kernel module builds against the
+  7.3.5-2 headers: 177 passed, 0 failed.
+- Pre-release check of the package repository (--bauen): tarball and package
+  without hits.
+- Local gate of promote-release.sh: the private test script 19 passed, 0 failed,
+  1 blocked (core.hooksPath is not set in this checkout); the export guard
+  0 hits.
+
+NOT_RUN: namcap and ShellCheck for this release, every README command that
+changes the system, the hardware gate (pacman -U on a MacBook9,1, the DKMS
+build of macbook91-applesmc on 7.3.5, modprobe, macbook91-hw-verify, charge
+limit read and write).
+NOT VERIFIED: that the applesmc module loads on 7.3.5, that the charge limit
+works there, and which of applesmc and macsmc-acpi binds the SMC first.
+
+Built package (not tracked; local build, makepkg output differs per machine):
+0ecbab9070779c9d3d6acf06535a46b40e0757b915f47a1ecbce04e33636f189  macbook91-hw-fixes-20261123.01-1-any.pkg.tar.zst
